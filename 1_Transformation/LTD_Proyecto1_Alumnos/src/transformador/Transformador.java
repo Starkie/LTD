@@ -20,7 +20,7 @@ public class Transformador {
 	public static boolean transformFile(File fIn, File fOut) {
 		try {
 			CompilationUnit cu = JavaParser.parse(fIn);
-			new Visitador().visit(cu, null);
+			new Visitador_1().visit(cu, null);
 			FileWriter fw = new FileWriter(fOut);
 			fw.write(cu.toString());
 			fw.close();
