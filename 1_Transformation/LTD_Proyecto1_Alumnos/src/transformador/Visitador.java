@@ -17,8 +17,10 @@ import japa.parser.ast.expr.AssignExpr.Operator;
 import japa.parser.ast.expr.CastExpr;
 import japa.parser.ast.expr.Expression;
 import japa.parser.ast.expr.IntegerLiteralExpr;
+import japa.parser.ast.expr.LiteralExpr;
 import japa.parser.ast.expr.MethodCallExpr;
 import japa.parser.ast.expr.NameExpr;
+import japa.parser.ast.expr.ThisExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
 import japa.parser.ast.stmt.BlockStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
@@ -32,6 +34,8 @@ import japa.parser.ast.type.ReferenceType;
 import japa.parser.ast.type.Type;
 import japa.parser.ast.visitor.ModifierVisitorAdapter;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -41,15 +45,15 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	/********************** Atributos ***********************/
 	/********************************************************/
 	
-	// Usamos un contador para numerar los mŽtodos que creemos
+	// Usamos un contador para numerar los métodos que creemos
 	int contador=1;  
-	// Variable usada para conocer la lista de mŽtodos visitados
+	// Variable usada para conocer la lista de métodos visitados
 	LinkedList<MethodDeclaration> previousMethodDeclarations = new LinkedList<MethodDeclaration>();
-	// Variable usada para saber cu‡l es el œltimo mŽtodo visitado (el que estoy visitando ahora)
+	// Variable usada para saber cuál es el último método visitado (el que estoy visitando ahora)
 	MethodDeclaration methodDeclaration;
 	// Variable usada para conocer la lista de clases visitadas
 	LinkedList<ClassOrInterfaceDeclaration> previousClassDeclarations = new LinkedList<ClassOrInterfaceDeclaration>();
-	// Variable usada para saber cu‡l es la œltima clase visitada (la que estoy visitando ahora)	
+	// Variable usada para saber cuál es la última clase visitada (la que estoy visitando ahora)	
 	ClassOrInterfaceDeclaration classDeclaration;
 
 	/********************************************************/
@@ -68,8 +72,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		return newClassDeclaration;
 	}
-	// Visitador de mŽtodos
-	// Este visitador no hace nada, simplemente registra en una lista los mŽtodos que se van visitando	
+	// Visitador de métodos
+	// Este visitador no hace nada, simplemente registra en una lista los métodos que se van visitando	
 	public Node visit(MethodDeclaration methodDeclaration, Object args)
 	{
 		this.previousMethodDeclarations.add(methodDeclaration);
@@ -88,16 +92,16 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		/******** LLAMADOR ********/
 		/**************************/		
 		
-		// Nombre del mŽtodo que crearemos por cada sentencia "while"
+		// Nombre del método que crearemos por cada sentencia "while"
 		String methodName = "metodo_"+contador++;
 		
 		// Creamos un objeto Loop que sirve para examinar bucles
 		Loop loop = new While(null, null, whileStmt);
-		// El objeto Loop nos calcula la lista de variables declaradas en el mŽtodo y usadas en el bucle (la intersecci—n)
+		// El objeto Loop nos calcula la lista de variables declaradas en el método y usadas en el bucle (la intersección)
 		List<Variable> variables = loop.getUsedVariables(methodDeclaration);
-		// Creamos un objeto LoopVariables que sirve para convertir la lista de variables en lista de argumentos y par‡metros
+		// Creamos un objeto LoopVariables que sirve para convertir la lista de variables en lista de argumentos y parámetros
 		LoopVariables loopVariables = new LoopVariables(variables);
-		// El objeto LoopVariables nos calcula la lista de argumentos del mŽtodo 
+		// El objeto LoopVariables nos calcula la lista de argumentos del método 
 		List<Expression> arguments = loopVariables.getArgs();
 		
 		////////////////////////////////////////////////////////////
@@ -105,6 +109,50 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo if newIf
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
+
+		List<Statement> ifBlockStatements = new ArrayList<Statement>();
+
+		// Method call expresion: this.method_x(args);
+		MethodCallExpr methodCallExpr = new MethodCallExpr(new ThisExpr(), methodName, arguments);
+		
+		// Method call result assignment.
+		ClassOrInterfaceType objectType = new ClassOrInterfaceType("Object");
+		ReferenceType methodReturnType = new ReferenceType(objectType, 1);
+		
+		// TODO: Check that there are no variables named result already in the scope.
+		String methodCallResultName = "result";
+		
+		VariableDeclaratorId methodCallResultVariableId = new VariableDeclaratorId(methodCallResultName);
+		VariableDeclarator resultAssignment = new VariableDeclarator(methodCallResultVariableId, methodCallExpr); 
+		VariableDeclarationExpr resultDeclaration = new VariableDeclarationExpr(methodReturnType, Arrays.asList(resultAssignment));
+
+		ExpressionStmt loopMethodCallStatement = new ExpressionStmt(resultDeclaration);
+		
+		ifBlockStatements.add(loopMethodCallStatement);
+		
+		// Unbox and assign the return values from the method call to the corresponding arguments.
+		List<String> returnNames = loopVariables.getReturnNames();
+		List<Type> returnTypes = loopVariables.getReturnTypes();
+		
+		for (int i = 0; i < returnNames.size(); i++)
+		{
+			// Access the results array: result[i].
+			ArrayAccessExpr resultValue = new ArrayAccessExpr(new NameExpr(methodCallResultName), new IntegerLiteralExpr("" + i));
+			
+			// Unbox the value with a casting to the expected type: (Type) result[i]
+			CastExpr valueCast = new CastExpr(returnTypes.get(i) , resultValue );
+			
+			// Assign the value to the input parameter: arg = (Type) result[i]
+			NameExpr parameterNameExpr = new NameExpr(returnNames.get(i));
+			AssignExpr assignExpr = new AssignExpr(parameterNameExpr, valueCast, Operator.assign);
+			
+			// Add the statement to the if block.
+			ifBlockStatements.add(new ExpressionStmt(assignExpr));
+		}
+				
+		Expression condition = whileStmt.getCondition();
+		
+		IfStmt newIf = new IfStmt(condition, new BlockStmt(ifBlockStatements), null);
 		
 		/**************************/
 		/********* METODO *********/
@@ -116,8 +164,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
 		
-		// A–adimos el nuevo mŽtodo a la clase actual
-		this.classDeclaration.getMembers().add(newMethod);
+		// Añadimos el nuevo método a la clase actual
+		////this.classDeclaration.getMembers().add(newMethod);
 		
 		return newIf;
 	}
@@ -142,7 +190,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		return new ClassOrInterfaceType(wrapperName);
 	}
 	// Dada una sentencia, 
-	// Si es una œnica instrucci—n, devuelve un bloque equivalente 
+	// Si es una única instrucción, devuelve un bloque equivalente 
 	// Si es un bloque, lo devuelve
 	private BlockStmt blockWrapper(Statement statement)
 	{
