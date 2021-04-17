@@ -115,9 +115,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
 
-		List<Statement> ifBlockStatements = new ArrayList<Statement>();
-		
-		boolean isCallerMethodStatic = (this.methodDeclaration.getModifiers() & ModifierSet.STATIC) != 0;
+		List<Statement> ifBlockStatements = new ArrayList<Statement>();		
 		
 		Expression methodCallScope = isCallerMethodStatic ? null : new ThisExpr(); 
 		
@@ -159,9 +157,9 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 			ifBlockStatements.add(new ExpressionStmt(assignExpr));
 		}
 				
-		Expression condition = whileStmt.getCondition();
+		Expression loopCondition = whileStmt.getCondition();
 		
-		IfStmt newIf = new IfStmt(condition, new BlockStmt(ifBlockStatements), null);
+		IfStmt newIf = new IfStmt(loopCondition, new BlockStmt(ifBlockStatements), null);
 		
 		/**************************/
 		/********* METODO *********/
@@ -172,33 +170,14 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo método newMethod
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
-		// MethodDeclaration methodDeclaration = new MethodDeclaration(0, methodReturnType.getType(), );
-				
 		
-		// Añadimos el nuevo método a la clase actual
-		
+		int recursiveMethodModifiers = getRecursiveMethodModifiers(this.methodDeclaration.getModifiers());
+
 		List<Parameter> methodParameters = variables.stream()
 				.map(v -> v.getParameter())
 				.collect(Collectors.toList());
 		
-		BlockStmt methodBody = blockWrapper(whileStmt.getBody());
-		
-		ReturnStmt methodReturnStmt = new ReturnStmt(methodCallExpr);
-		IfStmt recursionIf = new IfStmt(whileStmt.getCondition(), blockWrapper(methodReturnStmt), null);
-		recursionIf.setCondition(condition);
-		methodBody.getStmts().add(recursionIf);
-		
-		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(arguments);
-		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
-		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
-		methodBody.getStmts().add(returnResultArray);
-		
-		// The method created should only be locally accessible by the class that declares the loop.
-		int recursiveMethodModifiers = ModifierSet.PRIVATE;
-		
-		recursiveMethodModifiers =  isCallerMethodStatic ?
-				recursiveMethodModifiers | ModifierSet.STATIC 
-				: recursiveMethodModifiers;
+		BlockStmt methodBody = buildRecursiveMethodBody(loopCondition, whileStmt, arguments, methodCallExpr, methodReturnType);
 
 		MethodDeclaration newMethod = new MethodDeclaration();
 		
@@ -209,9 +188,70 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		newMethod.setType(methodReturnType.getType());
 		newMethod.setArrayCount(methodReturnType.getArrayCount());	
 		
+		// Añadimos el nuevo método a la clase actual
 		this.classDeclaration.getMembers().add(newMethod);
 		
 		return newIf;
+	}
+	
+	/**
+	 * Builds the body of the equivalent recursive method based on the input parameters.
+	 * @param loopCondition The condition to iterate in the loop.
+	 * @param loopBody The instructions executed in the body of the loop.
+	 * @param loopArguments The name of the parameters modified in the loop.
+	 * @param recursiveMethodCall The method call expression to invoke the recursive method.
+	 * @param methodReturnType The return type of the recursive method.
+	 * @return The body of the equivalent recursive method.
+	 */
+	private BlockStmt buildRecursiveMethodBody(
+			Expression loopCondition, 
+			Statement loopBody, 
+			List<Expression> loopArguments,
+			MethodCallExpr recursiveMethodCall,
+			ReferenceType methodReturnType) 
+	{
+		// The body of the method begins with the code of the loop iteration.
+		BlockStmt methodBody = blockWrapper(loopBody);
+		
+		// Builds the if statement that contains the recursive method call. If the loop continue is still true, 
+		// proceeds to a new iteration:
+		//
+		// if (loopCondition) {
+		//	  return metodo_1(x);
+		// }
+		ReturnStmt returnRecursiveCallResult = new ReturnStmt(recursiveMethodCall);
+		IfStmt recursionIf = new IfStmt(loopCondition, blockWrapper(returnRecursiveCallResult), null);
+		recursionIf.setCondition(loopCondition);
+		
+		methodBody.getStmts().add(recursionIf);
+		
+		// Builds result of the current iteration. To stop iterating: return new Object[] { x };
+		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(loopArguments);
+		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
+		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
+		
+		methodBody.getStmts().add(returnResultArray);
+		
+		return methodBody;
+	}
+
+	/**
+	 * Gets the {@link ModifierSet} for the recursive method. It takes into account the 
+	 * modifiers of the caller method, which will limit things like its membership to a class.
+	 * @param callerMethodModifiers The caller method modifiers.
+	 * @return The recursive method modifiers.
+	 */
+	private int getRecursiveMethodModifiers(int callerMethodModifiers) {
+		boolean isCallerMethodStatic = (callerMethodModifiers & ModifierSet.STATIC) != 0;
+		
+		// The method created should only be locally accessible by the class that declares the loop.
+		int recursiveMethodModifiers = ModifierSet.PRIVATE;
+		
+		recursiveMethodModifiers =  isCallerMethodStatic ?
+				recursiveMethodModifiers | ModifierSet.STATIC 
+				: recursiveMethodModifiers;
+		
+		return recursiveMethodModifiers;
 	}
 
 	// Dada un tipo, 
