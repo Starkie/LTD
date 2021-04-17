@@ -115,26 +115,22 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo if newIf
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
-		List<Statement> ifBlockStatements = new ArrayList<Statement>();		
+		List<Statement> ifBlockStatements = new ArrayList<Statement>();
+		
+		// TODO: Check that there are no variables named result already in the scope.
+		String methodCallResultName = "result";
 		
 		boolean isCallerMethodStatic = (this.methodDeclaration.getModifiers() & ModifierSet.STATIC) != 0;		
 		Expression methodCallScope = isCallerMethodStatic ? null : new ThisExpr(); 
 		
-		// Method call expresion: this.method_x(args);
+		// Method call expression: this.method_x(args);
 		MethodCallExpr methodCallExpr = new MethodCallExpr(methodCallScope, methodName, arguments);
 		
 		// Method call result assignment.
 		ClassOrInterfaceType objectType = new ClassOrInterfaceType("Object");
 		ReferenceType methodReturnType = new ReferenceType(objectType, 1);
 		
-		// TODO: Check that there are no variables named result already in the scope.
-		String methodCallResultName = "result";
-		
-		VariableDeclaratorId methodCallResultVariableId = new VariableDeclaratorId(methodCallResultName);
-		VariableDeclarator resultAssignment = new VariableDeclarator(methodCallResultVariableId, methodCallExpr); 
-		VariableDeclarationExpr resultDeclaration = new VariableDeclarationExpr(methodReturnType, Arrays.asList(resultAssignment));
-
-		ExpressionStmt loopMethodCallStatement = new ExpressionStmt(resultDeclaration);
+		Statement loopMethodCallStatement = buildMethodCallExpression(methodCallResultName, methodCallExpr, methodReturnType);
 		ifBlockStatements.add(loopMethodCallStatement);
 		
 		Collection<Statement> resultVariablesUnboxed = buildLoopResultCastingStatements(loopVariables, methodCallResultName);
@@ -174,6 +170,25 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		this.classDeclaration.getMembers().add(newMethod);
 		
 		return newIf;
+	}
+	
+	/**
+	 * Given an expression to call the recursive method, it builds another expression to declare a variable 
+	 * and assign the results of the method call.
+	 * @param resultVariableName The name of the variable where the results should be stored.
+	 * @param methodCallExpr The expression that represents the recursive method call.
+	 * @param methodReturnType The expected return type of the method.
+	 * @return The statement of the result assignment of the method call.
+	 */
+	private Statement buildMethodCallExpression(String resultVariableName, MethodCallExpr methodCallExpr, ReferenceType methodReturnType) {
+		VariableDeclaratorId methodCallResultVariableId = new VariableDeclaratorId(resultVariableName);
+		VariableDeclarator resultAssignment = new VariableDeclarator(methodCallResultVariableId, methodCallExpr); 
+		
+		VariableDeclarationExpr resultDeclaration = new VariableDeclarationExpr(methodReturnType, Arrays.asList(resultAssignment));
+
+		ExpressionStmt loopMethodCallStatement = new ExpressionStmt(resultDeclaration);
+		
+		return loopMethodCallStatement;
 	}
 	
 	/**
