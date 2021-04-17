@@ -5,8 +5,11 @@ import iter2rec.transformation.loop.While;
 import iter2rec.transformation.variable.LoopVariables;
 import iter2rec.transformation.variable.Variable;
 import japa.parser.ast.Node;
+import japa.parser.ast.body.BodyDeclaration;
 import japa.parser.ast.body.ClassOrInterfaceDeclaration;
 import japa.parser.ast.body.MethodDeclaration;
+import japa.parser.ast.body.ModifierSet;
+import japa.parser.ast.body.Parameter;
 import japa.parser.ast.body.VariableDeclarator;
 import japa.parser.ast.body.VariableDeclaratorId;
 import japa.parser.ast.expr.ArrayAccessExpr;
@@ -27,6 +30,7 @@ import japa.parser.ast.stmt.ExpressionStmt;
 import japa.parser.ast.stmt.IfStmt;
 import japa.parser.ast.stmt.ReturnStmt;
 import japa.parser.ast.stmt.Statement;
+import japa.parser.ast.stmt.ThrowStmt;
 import japa.parser.ast.stmt.WhileStmt;
 import japa.parser.ast.type.ClassOrInterfaceType;
 import japa.parser.ast.type.PrimitiveType;
@@ -38,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Visitador extends ModifierVisitorAdapter<Object>
 {
@@ -111,9 +116,13 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		////////////////////////////////////////////////////////////
 
 		List<Statement> ifBlockStatements = new ArrayList<Statement>();
-
+		
+		boolean isCallerMethodStatic = (this.methodDeclaration.getModifiers() & ModifierSet.STATIC) != 0;
+		
+		Expression methodCallScope = isCallerMethodStatic ? null : new ThisExpr(); 
+		
 		// Method call expresion: this.method_x(args);
-		MethodCallExpr methodCallExpr = new MethodCallExpr(new ThisExpr(), methodName, arguments);
+		MethodCallExpr methodCallExpr = new MethodCallExpr(methodCallScope, methodName, arguments);
 		
 		// Method call result assignment.
 		ClassOrInterfaceType objectType = new ClassOrInterfaceType("Object");
@@ -163,9 +172,47 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo método newMethod
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
+		// MethodDeclaration methodDeclaration = new MethodDeclaration(0, methodReturnType.getType(), );
+				
 		
 		// Añadimos el nuevo método a la clase actual
-		////this.classDeclaration.getMembers().add(newMethod);
+		
+		List<Parameter> methodParameters = variables.stream()
+				.map(v -> v.getParameter())
+				.collect(Collectors.toList());
+		
+		BlockStmt methodBody = blockWrapper(whileStmt.getBody());
+		
+		ReturnStmt methodReturnStmt = new ReturnStmt(methodCallExpr);
+		IfStmt recursionIf = new IfStmt(whileStmt.getCondition(), blockWrapper(methodReturnStmt), null);
+		recursionIf.setCondition(condition);
+		methodBody.getStmts().add(recursionIf);
+		
+		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(arguments);
+		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
+		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
+		methodBody.getStmts().add(returnResultArray);
+		
+		// The method created should only be locally accessible by the class that declares the loop.
+		int recursiveMethodModifiers = ModifierSet.PRIVATE;
+		
+		recursiveMethodModifiers =  isCallerMethodStatic ?
+				recursiveMethodModifiers | ModifierSet.STATIC 
+				: recursiveMethodModifiers;
+
+		BodyDeclaration newMethod = new MethodDeclaration(
+				null,
+				recursiveMethodModifiers,
+				null,
+				null,
+				methodReturnType.getType(),
+				methodName,
+				methodParameters,
+				methodReturnType.getArrayCount(),
+				null,
+				methodBody);
+		
+		this.classDeclaration.getMembers().add(newMethod);
 		
 		return newIf;
 	}
