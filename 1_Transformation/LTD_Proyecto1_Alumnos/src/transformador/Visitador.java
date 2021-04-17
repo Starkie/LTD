@@ -40,6 +40,7 @@ import japa.parser.ast.visitor.ModifierVisitorAdapter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -114,9 +115,9 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo if newIf
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
-
 		List<Statement> ifBlockStatements = new ArrayList<Statement>();		
 		
+		boolean isCallerMethodStatic = (this.methodDeclaration.getModifiers() & ModifierSet.STATIC) != 0;		
 		Expression methodCallScope = isCallerMethodStatic ? null : new ThisExpr(); 
 		
 		// Method call expresion: this.method_x(args);
@@ -134,31 +135,12 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		VariableDeclarationExpr resultDeclaration = new VariableDeclarationExpr(methodReturnType, Arrays.asList(resultAssignment));
 
 		ExpressionStmt loopMethodCallStatement = new ExpressionStmt(resultDeclaration);
-		
 		ifBlockStatements.add(loopMethodCallStatement);
 		
-		// Unbox and assign the return values from the method call to the corresponding arguments.
-		List<String> returnNames = loopVariables.getReturnNames();
-		List<Type> returnTypes = loopVariables.getReturnTypes();
+		Collection<Statement> resultVariablesUnboxed = buildLoopResultCastingStatements(loopVariables, methodCallResultName);
+		ifBlockStatements.addAll(resultVariablesUnboxed);
 		
-		for (int i = 0; i < returnNames.size(); i++)
-		{
-			// Access the results array: result[i].
-			ArrayAccessExpr resultValue = new ArrayAccessExpr(new NameExpr(methodCallResultName), new IntegerLiteralExpr("" + i));
-			
-			// Unbox the value with a casting to the expected type: (Type) result[i]
-			CastExpr valueCast = new CastExpr(returnTypes.get(i) , resultValue );
-			
-			// Assign the value to the input parameter: arg = (Type) result[i]
-			NameExpr parameterNameExpr = new NameExpr(returnNames.get(i));
-			AssignExpr assignExpr = new AssignExpr(parameterNameExpr, valueCast, Operator.assign);
-			
-			// Add the statement to the if block.
-			ifBlockStatements.add(new ExpressionStmt(assignExpr));
-		}
-				
-		Expression loopCondition = whileStmt.getCondition();
-		
+		Expression loopCondition = whileStmt.getCondition();		
 		IfStmt newIf = new IfStmt(loopCondition, new BlockStmt(ifBlockStatements), null);
 		
 		/**************************/
@@ -192,6 +174,37 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		this.classDeclaration.getMembers().add(newMethod);
 		
 		return newIf;
+	}
+	
+	/**
+	 * Builds the necessary castings for each of the variables modified on the loop.
+	 * @param loopVariables The collection of variables referenced by the loop.
+	 * @param resultObjectName The name of the object containing the results of the method call.
+	 * @return The built statements for each modified variable.
+	 */
+	private static Collection<Statement> buildLoopResultCastingStatements(LoopVariables loopVariables, String resultObjectName) {
+		// Unbox and assign the return values from the method call to the corresponding arguments.
+		List<String> returnNames = loopVariables.getReturnNames();
+		List<Type> returnTypes = loopVariables.getReturnTypes();
+		
+		List<Statement> assignmentExpressions = new ArrayList<Statement>();
+		
+		for (int i = 0; i < returnNames.size(); i++)
+		{
+			// Access the results array: result[i].
+			ArrayAccessExpr resultValue = new ArrayAccessExpr(new NameExpr(resultObjectName), new IntegerLiteralExpr("" + i));
+			
+			// Unbox the value with a casting to the expected type: (Type) result[i]
+			CastExpr valueCast = new CastExpr(returnTypes.get(i) , resultValue );
+			
+			// Assign the value to the input parameter: arg = (Type) result[i]
+			NameExpr parameterNameExpr = new NameExpr(returnNames.get(i));
+			AssignExpr assignExpr = new AssignExpr(parameterNameExpr, valueCast, Operator.assign);
+			
+			assignmentExpressions.add(new ExpressionStmt(assignExpr));
+		}
+		
+		return assignmentExpressions;
 	}
 	
 	/**
@@ -241,7 +254,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	 * @param callerMethodModifiers The caller method modifiers.
 	 * @return The recursive method modifiers.
 	 */
-	private int getRecursiveMethodModifiers(int callerMethodModifiers) {
+	private static int getRecursiveMethodModifiers(int callerMethodModifiers) {
 		boolean isCallerMethodStatic = (callerMethodModifiers & ModifierSet.STATIC) != 0;
 		
 		// The method created should only be locally accessible by the class that declares the loop.
