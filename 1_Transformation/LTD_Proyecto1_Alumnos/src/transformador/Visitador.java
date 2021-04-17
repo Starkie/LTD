@@ -200,17 +200,14 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				recursiveMethodModifiers | ModifierSet.STATIC 
 				: recursiveMethodModifiers;
 
-		BodyDeclaration newMethod = new MethodDeclaration(
-				null,
-				recursiveMethodModifiers,
-				null,
-				null,
-				methodReturnType.getType(),
-				methodName,
-				methodParameters,
-				methodReturnType.getArrayCount(),
-				null,
-				methodBody);
+		MethodDeclaration newMethod = new MethodDeclaration();
+		
+		newMethod.setBody(methodBody);
+		newMethod.setModifiers(recursiveMethodModifiers);
+		newMethod.setName(methodName);
+		newMethod.setParameters(methodParameters);
+		newMethod.setType(methodReturnType.getType());
+		newMethod.setArrayCount(methodReturnType.getArrayCount());	
 		
 		this.classDeclaration.getMembers().add(newMethod);
 		
