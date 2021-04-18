@@ -254,12 +254,45 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 			List<Expression> loopArguments,
 			MethodCallExpr recursiveMethodCall,
 			ReferenceType methodReturnType) 
-	{
-		// The body of the method begins with the code of the loop iteration.
+	{	
 		BlockStmt methodBody = new BlockStmt(new ArrayList<Statement>());
 		
+		// Builds result of the current iteration. To stop iterating: return new Object[] { x };
+		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(loopArguments);
+		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
+		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
+		
+		boolean anyTopLevelReturn = false;
+		
+		// The body of the method begins with the code of the loop iteration.
+		List<Statement> loopBodyStatements = new ArrayList<Statement>();
+		
 		// Clone the loop body inside the method body, to avoid modifying the original.
-		methodBody.getStmts().addAll(loopBody.getStmts());
+		for (Statement stmt : loopBody.getStmts())
+		{
+			// Any return statement should be replaced with the equivalent
+			// recursive method result return statement.
+			if (stmt instanceof ReturnStmt)
+			{
+				anyTopLevelReturn = true;
+				
+				loopBodyStatements.add(returnResultArray);
+			}
+			else
+			{
+				loopBodyStatements.add(stmt);
+			}
+		}
+				
+		methodBody.getStmts().addAll(loopBodyStatements);
+		
+		if (anyTopLevelReturn)
+		{
+			// Since there was a first-level return statement, it makes no
+			// sense to add the rest of the loop statements.
+			// Otherwise, they would be unreachable code.
+			return methodBody;
+		}
 		
 		// Builds the if statement that contains the recursive method call. If the loop continue is still true, 
 		// proceeds to a new iteration:
@@ -273,15 +306,11 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		methodBody.getStmts().add(recursionIf);
 		
-		// Builds result of the current iteration. To stop iterating: return new Object[] { x };
-		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(loopArguments);
-		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
-		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
-		
 		methodBody.getStmts().add(returnResultArray);
 		
 		return methodBody;
 	}
+
 
 	/**
 	 * Gets the {@link ModifierSet} for the recursive method. It takes into account the 
