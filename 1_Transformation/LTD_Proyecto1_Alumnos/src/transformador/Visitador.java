@@ -111,6 +111,14 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		return transformLoopsToRecursiveMethods(loop, doStmt.getCondition(), blockWrapper(doStmt.getBody()), LoopType.DO_WHILE);
 	}
 	
+	/**
+	 * Transforms the given loop condition into an equivalent tail-recursive method. 
+	 * @param loop The loop object, used to analyse its variable references. 
+	 * @param loopCondition The expression of the condition to continue iterating in the loop.
+	 * @param loopBody The body of the loop. Contains all the instructions that could be executed in an iteration.
+	 * @param loopType The type of the loop. It affects the generated code depending on the loop.
+	 * @return The node node with the equivalent method call, used to replace the loop statement.
+	 */
 	private Node transformLoopsToRecursiveMethods(Loop loop, Expression loopCondition, BlockStmt loopBody, LoopType loopType) {
 		/**************************/
 		/******** LLAMADOR ********/
@@ -126,11 +134,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// El objeto LoopVariables nos calcula la lista de argumentos del método 
 		List<Expression> arguments = loopVariables.getArgs();
 		
-		////////////////////////////////////////////////////////////
-		////////////////////////////////////////////////////////////
-		//-------------------> CREAR EL nuevo if newIf
-		////////////////////////////////////////////////////////////
-		////////////////////////////////////////////////////////////
 		List<Statement> ifBlockStatements = new ArrayList<Statement>();
 		
 		// In a do-while instruction, the first iteration is executed unconditionally. 
@@ -163,12 +166,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		/**************************/
 		/********* METODO *********/
 		/**************************/
-
-		////////////////////////////////////////////////////////////		
-		////////////////////////////////////////////////////////////
-		//-------------------> CREAR EL nuevo método newMethod
-		////////////////////////////////////////////////////////////
-		////////////////////////////////////////////////////////////
 		int recursiveMethodModifiers = getRecursiveMethodModifiers(this.methodDeclaration.getModifiers());
 
 		List<Parameter> methodParameters = variables.stream()
