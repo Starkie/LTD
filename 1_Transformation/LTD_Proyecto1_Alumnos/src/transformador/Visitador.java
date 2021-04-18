@@ -28,6 +28,7 @@ import japa.parser.ast.expr.ThisExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
 import japa.parser.ast.stmt.BlockStmt;
 import japa.parser.ast.stmt.BreakStmt;
+import japa.parser.ast.stmt.ContinueStmt;
 import japa.parser.ast.stmt.DoStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
 import japa.parser.ast.stmt.IfStmt;
@@ -262,7 +263,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(loopArguments);
 		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
 		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
-		
+
 		boolean anyTopLevelReturn = false;
 		
 		// The body of the method begins with the code of the loop iteration.
@@ -279,6 +280,11 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				anyTopLevelReturn = true;
 				
 				loopBodyStatements.add(returnResultArray);
+			}
+			else if (stmt instanceof ContinueStmt)
+			{
+				// Stop copying statements after the continue, since they would be unreachable.
+				break;
 			}
 			else
 			{
@@ -305,7 +311,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ReturnStmt returnRecursiveCallResult = new ReturnStmt(recursiveMethodCall);
 		IfStmt recursionIf = new IfStmt(loopCondition, blockWrapper(returnRecursiveCallResult), null);
 		recursionIf.setCondition(loopCondition);
-		
+	
 		methodBody.getStmts().add(recursionIf);
 		
 		methodBody.getStmts().add(returnResultArray);
