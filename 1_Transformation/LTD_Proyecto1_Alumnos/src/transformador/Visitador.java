@@ -27,6 +27,7 @@ import japa.parser.ast.expr.NameExpr;
 import japa.parser.ast.expr.ThisExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
 import japa.parser.ast.stmt.BlockStmt;
+import japa.parser.ast.stmt.BreakStmt;
 import japa.parser.ast.stmt.DoStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
 import japa.parser.ast.stmt.IfStmt;
@@ -272,7 +273,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		{
 			// Any return statement should be replaced with the equivalent
 			// recursive method result return statement.
-			if (stmt instanceof ReturnStmt)
+			if (stmt instanceof ReturnStmt
+				|| stmt instanceof BreakStmt)
 			{
 				anyTopLevelReturn = true;
 				
