@@ -1,5 +1,6 @@
 package transformador;
 	
+import iter2rec.transformation.loop.Do;
 import iter2rec.transformation.loop.Loop;
 import iter2rec.transformation.loop.While;
 import iter2rec.transformation.variable.LoopVariables;
@@ -26,6 +27,7 @@ import japa.parser.ast.expr.NameExpr;
 import japa.parser.ast.expr.ThisExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
 import japa.parser.ast.stmt.BlockStmt;
+import japa.parser.ast.stmt.DoStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
 import japa.parser.ast.stmt.IfStmt;
 import japa.parser.ast.stmt.ReturnStmt;
@@ -93,7 +95,23 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	
 	// Visitador de sentencias "while"
 	public Node visit(WhileStmt whileStmt, Object args)
+	{		
+		// Creamos un objeto Loop que sirve para examinar bucles
+		Loop loop = new While(null, null, whileStmt);
+		
+		return transformLoopsToRecursiveMethods(loop, whileStmt.getCondition(), blockWrapper(whileStmt.getBody()), LoopType.WHILE);
+	}
+	
+	// Visitador de sentencias "do-while"
+	public Node visit(DoStmt doStmt, Object args)
 	{
+		// Creamos un objeto Loop que sirve para examinar bucles
+		Loop loop = new Do(null, null, doStmt);
+				
+		return transformLoopsToRecursiveMethods(loop, doStmt.getCondition(), blockWrapper(doStmt.getBody()), LoopType.DO_WHILE);
+	}
+	
+	private Node transformLoopsToRecursiveMethods(Loop loop, Expression loopCondition, BlockStmt loopBody, LoopType loopType) {
 		/**************************/
 		/******** LLAMADOR ********/
 		/**************************/		
@@ -101,8 +119,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Nombre del método que crearemos por cada sentencia "while"
 		String methodName = "metodo_"+contador++;
 		
-		// Creamos un objeto Loop que sirve para examinar bucles
-		Loop loop = new While(null, null, whileStmt);
 		// El objeto Loop nos calcula la lista de variables declaradas en el método y usadas en el bucle (la intersección)
 		List<Variable> variables = loop.getUsedVariables(methodDeclaration);
 		// Creamos un objeto LoopVariables que sirve para convertir la lista de variables en lista de argumentos y parámetros
@@ -116,6 +132,12 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
 		List<Statement> ifBlockStatements = new ArrayList<Statement>();
+		
+		// In a do-while instruction, the first iteration is executed unconditionally. 
+		if (loopType == LoopType.DO_WHILE)
+		{
+			ifBlockStatements.add(blockWrapper(loopBody));
+		}
 		
 		// TODO: Check that there are no variables named result already in the scope.
 		String methodCallResultName = "result";
@@ -136,7 +158,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		Collection<Statement> resultVariablesUnboxed = buildLoopResultCastingStatements(loopVariables, methodCallResultName);
 		ifBlockStatements.addAll(resultVariablesUnboxed);
 		
-		Expression loopCondition = whileStmt.getCondition();		
 		IfStmt newIf = new IfStmt(loopCondition, new BlockStmt(ifBlockStatements), null);
 		
 		/**************************/
@@ -148,14 +169,13 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		//-------------------> CREAR EL nuevo método newMethod
 		////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////
-		
 		int recursiveMethodModifiers = getRecursiveMethodModifiers(this.methodDeclaration.getModifiers());
 
 		List<Parameter> methodParameters = variables.stream()
 				.map(v -> v.getParameter())
 				.collect(Collectors.toList());
 		
-		BlockStmt methodBody = buildRecursiveMethodBody(loopCondition, whileStmt, arguments, methodCallExpr, methodReturnType);
+		BlockStmt methodBody = buildRecursiveMethodBody(loopCondition, loopBody, arguments, methodCallExpr, methodReturnType);
 
 		MethodDeclaration newMethod = new MethodDeclaration();
 		
@@ -233,13 +253,16 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	 */
 	private BlockStmt buildRecursiveMethodBody(
 			Expression loopCondition, 
-			Statement loopBody, 
+			BlockStmt loopBody, 
 			List<Expression> loopArguments,
 			MethodCallExpr recursiveMethodCall,
 			ReferenceType methodReturnType) 
 	{
 		// The body of the method begins with the code of the loop iteration.
-		BlockStmt methodBody = blockWrapper(loopBody);
+		BlockStmt methodBody = new BlockStmt(new ArrayList<Statement>());
+		
+		// Clone the loop body inside the method body, to avoid modifying the original.
+		methodBody.getStmts().addAll(loopBody.getStmts());
 		
 		// Builds the if statement that contains the recursive method call. If the loop continue is still true, 
 		// proceeds to a new iteration:
@@ -316,5 +339,15 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		block.setStmts(blockStmts);
 
 		return block;
+	}
+	
+	/**
+	 * The type loop that is being analysed.
+	 *
+	 */
+	private enum LoopType 
+	{
+		WHILE,
+		DO_WHILE,
 	}
 }
