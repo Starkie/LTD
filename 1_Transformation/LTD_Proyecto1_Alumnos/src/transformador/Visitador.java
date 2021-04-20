@@ -2,6 +2,7 @@ package transformador;
 	
 import iter2rec.transformation.loop.Do;
 import iter2rec.transformation.loop.For;
+import iter2rec.transformation.loop.Foreach;
 import iter2rec.transformation.loop.Loop;
 import iter2rec.transformation.loop.While;
 import iter2rec.transformation.variable.LoopVariables;
@@ -18,14 +19,17 @@ import japa.parser.ast.expr.ArrayAccessExpr;
 import japa.parser.ast.expr.ArrayCreationExpr;
 import japa.parser.ast.expr.ArrayInitializerExpr;
 import japa.parser.ast.expr.AssignExpr;
+import japa.parser.ast.expr.BinaryExpr;
 import japa.parser.ast.expr.AssignExpr.Operator;
 import japa.parser.ast.expr.CastExpr;
 import japa.parser.ast.expr.Expression;
+import japa.parser.ast.expr.FieldAccessExpr;
 import japa.parser.ast.expr.IntegerLiteralExpr;
 import japa.parser.ast.expr.LiteralExpr;
 import japa.parser.ast.expr.MethodCallExpr;
 import japa.parser.ast.expr.NameExpr;
 import japa.parser.ast.expr.ThisExpr;
+import japa.parser.ast.expr.UnaryExpr;
 import japa.parser.ast.expr.VariableDeclarationExpr;
 import japa.parser.ast.stmt.BlockStmt;
 import japa.parser.ast.stmt.BreakStmt;
@@ -33,6 +37,7 @@ import japa.parser.ast.stmt.ContinueStmt;
 import japa.parser.ast.stmt.DoStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
 import japa.parser.ast.stmt.ForStmt;
+import japa.parser.ast.stmt.ForeachStmt;
 import japa.parser.ast.stmt.IfStmt;
 import japa.parser.ast.stmt.ReturnStmt;
 import japa.parser.ast.stmt.Statement;
@@ -40,6 +45,7 @@ import japa.parser.ast.stmt.ThrowStmt;
 import japa.parser.ast.stmt.WhileStmt;
 import japa.parser.ast.type.ClassOrInterfaceType;
 import japa.parser.ast.type.PrimitiveType;
+import japa.parser.ast.type.PrimitiveType.Primitive;
 import japa.parser.ast.type.ReferenceType;
 import japa.parser.ast.type.Type;
 import japa.parser.ast.visitor.ModifierVisitorAdapter;
@@ -59,6 +65,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	
 	// Usamos un contador para numerar los métodos que creemos
 	int contador=1;  
+	// Usamos un contador para numerar los index que creemos
+	int contador_index=1;
 	// Variable usada para conocer la lista de métodos visitados
 	LinkedList<MethodDeclaration> previousMethodDeclarations = new LinkedList<MethodDeclaration>();
 	// Variable usada para saber cuál es el último método visitado (el que estoy visitando ahora)
@@ -103,7 +111,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Creamos un objeto Loop que sirve para examinar bucles
 		Loop loop = new While(null, null, whileStmt);
 		
-		return transformLoopsToRecursiveMethods(loop, LoopType.WHILE, whileStmt.getCondition(), blockWrapper(whileStmt.getBody()), null);
+		return transformLoopsToRecursiveMethods(loop, LoopType.WHILE, whileStmt.getCondition(), blockWrapper(whileStmt.getBody()), null, null);
 	}
 	
 	// Visitador de sentencias "do-while"
@@ -112,7 +120,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Creamos un objeto Loop que sirve para examinar bucles
 		Loop loop = new Do(null, null, doStmt);
 				
-		return transformLoopsToRecursiveMethods(loop, LoopType.DO_WHILE, doStmt.getCondition(), blockWrapper(doStmt.getBody()), null);
+		return transformLoopsToRecursiveMethods(loop, LoopType.DO_WHILE, doStmt.getCondition(), blockWrapper(doStmt.getBody()), null, null);
 	}
 	
 	// Visitador de sentencias "for"
@@ -140,9 +148,65 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		loopBodyStmts.addAll(updateStatements);
 				
-		return transformLoopsToRecursiveMethods(loop, LoopType.FOR, forStmt.getCompare(), forBody, initStatements);
+		return transformLoopsToRecursiveMethods(loop, LoopType.FOR, forStmt.getCompare(), forBody, initStatements, null);
 	}
 	
+	// Visitador de sentencias "for-each"
+	public Node visit(ForeachStmt forEachStmt, Object args)
+	{
+		// Creamos un objeto Loop que sirve para examinar bucles
+		Loop loop = new Foreach(null, null, forEachStmt); 
+		
+		// To transform the foreach loop into an equivalent recursive method, it should be first transformed into an equivalent for-loop.
+		// This way, the conversor already implemented can be reused.
+		// There are 3 steps for this conversion:
+		//		1. Create a counter variable. This variable will indicate the current iteration. 
+		//		   It will also allow the access to the current element of the iterable collection.
+		//		2. Create a loop condition: The loop condition will a bounds check against the collection.
+		//		3. Create an increment expression: This expression will increment the counter, to progress to the next iteration.
+		//
+		// With these three instructions, the foreach loop can be rewritten as a for loop; and then transformed 
+		// into an equivalent recursive method. 
+		
+		// Declare the counter variable: int index = 0;
+		String indexVariableName = "index_" + contador_index++;
+		
+		PrimitiveType integerType = new PrimitiveType(Primitive.Int); 
+		VariableDeclaratorId indexVariableId = new VariableDeclaratorId(indexVariableName);
+		VariableDeclarator indexAssignment = new VariableDeclarator(indexVariableId, new IntegerLiteralExpr("0")); 
+		VariableDeclarationExpr indexDeclarationExpr = new VariableDeclarationExpr(integerType, Arrays.asList(indexAssignment));
+		
+		// The index variable will be an initialization statement that should be executed before the first iteration.
+		List<Statement> initStatements = Arrays.asList(new ExpressionStmt(indexDeclarationExpr));
+		
+		// Build the loop condition: index < iterable.length
+		NameExpr indexRef = new NameExpr(indexVariableName);
+		Expression foreachIterableCollection = forEachStmt.getIterable();
+		
+		FieldAccessExpr fieldAcces = new FieldAccessExpr(foreachIterableCollection, "length");
+		BinaryExpr indexComparison = new BinaryExpr(indexRef, fieldAcces, japa.parser.ast.expr.BinaryExpr.Operator.less);
+		
+		// Declare the update statements: index++.
+		List<Statement> originalBodyStatements = blockWrapper(forEachStmt.getBody()).getStmts();
+
+		// Add the increments to the body of the loop.
+		List<Statement> loopBodyStmts = new ArrayList<Statement>(originalBodyStatements);
+		BlockStmt foreachBody = new BlockStmt(loopBodyStmts);
+		
+		UnaryExpr indexIncrement = new UnaryExpr(indexRef, japa.parser.ast.expr.UnaryExpr.Operator.posIncrement);
+		loopBodyStmts.add(new ExpressionStmt(indexIncrement));
+		
+		// Assign the fist statetement to the iterable loop String animal = animals[index];
+		VariableDeclarationExpr iteratorVariable = forEachStmt.getVariable();		
+		ArrayAccessExpr iterableCollectionAccess = new ArrayAccessExpr(foreachIterableCollection, indexRef);
+		AssignExpr iteratorVariableAssign = new AssignExpr(iteratorVariable, iterableCollectionAccess, Operator.assign);
+		
+		loopBodyStmts.add(0, new ExpressionStmt(iteratorVariableAssign));
+			
+		Variable indexVariableRef = Variable.createVariable(0, integerType, indexVariableName, 0);
+				
+		return transformLoopsToRecursiveMethods(loop, LoopType.FOREACH, indexComparison, foreachBody, initStatements, Arrays.asList(indexVariableRef));
+	}	
 	
 	/**
 	 * Transforms the given loop condition into an equivalent tail-recursive method. 
@@ -150,10 +214,11 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	 * @param loopType The type of the loop. It affects the generated code depending on the loop.
 	 * @param loopCondition The expression of the condition to continue iterating in the loop.
 	 * @param loopBody The body of the loop. Contains all the instructions that could be executed in an iteration.
-	 * @param loopInitialization ('For loops' only) The initialization statements for the loop.
+	 * @param loopInitialization ({@link LoopType.For} only) The initialization statements for the loop.
+	 * @param additionalVariables ({@link LoopType.Foreach} only) The additional variables that should be registered as arguments to the loop.
 	 * @return The node node with the equivalent method call, used to replace the loop statement.
 	 */
-	private Node transformLoopsToRecursiveMethods(Loop loop, LoopType loopType, Expression loopCondition, BlockStmt loopBody, List<Statement> loopInitialization) {
+	private Node transformLoopsToRecursiveMethods(Loop loop, LoopType loopType, Expression loopCondition, BlockStmt loopBody, List<Statement> loopInitialization, List<Variable> additionalVariables) {
 		/**************************/
 		/******** LLAMADOR ********/
 		/**************************/		
@@ -169,6 +234,17 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		List<Expression> arguments = loopVariables.getArgs();
 		
 		List<Statement> ifBlockStatements = new ArrayList<Statement>();
+		
+		// In a for-each loop, the extra variables created in the caller method must be registered.
+		if (loopType == LoopType.FOREACH)
+		{
+			variables.addAll(additionalVariables);
+			
+			arguments.addAll(
+				additionalVariables.stream()
+					.map(v -> new NameExpr(v.getName()))
+					.collect(Collectors.toList()));
+		}
 		
 		// In a do-while instruction, the first iteration is executed unconditionally. 
 		if (loopType == LoopType.DO_WHILE)
@@ -199,7 +275,9 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		Statement result = newIf;
 		
-		if (loopType == LoopType.FOR)
+		// In a for or foreach loops, there is an initialization step before the first iteration.
+		if (loopType == LoopType.FOR 
+			|| loopType == LoopType.FOREACH)
 		{
 			ArrayList<Statement> blockStatements = new ArrayList<Statement>();
 			result = new BlockStmt(blockStatements);
@@ -244,7 +322,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		newMethod.setName(methodName);
 		newMethod.setParameters(methodParameters);
 		newMethod.setType(methodReturnType.getType());
-		newMethod.setArrayCount(methodReturnType.getArrayCount());	
+		newMethod.setArrayCount(methodReturnType.getArrayCount());
 		newMethod.setThrows(loopMethodThrows);
 		
 		// Añadimos el nuevo método a la clase actual
@@ -325,7 +403,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ArrayInitializerExpr arrayInitializerExpr = new ArrayInitializerExpr(loopArguments);
 		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
 		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
-
+		
 		// Builds the if statement that contains the recursive method call. If the loop continue is still true, 
 		// proceeds to a new iteration:
 		//
@@ -345,7 +423,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		for (Statement stmt : loopBody.getStmts())
 		{
 			Statement equivalentStatement = getEquivalentStatement(stmt, recursionIf, returnResultArray);
-				
+						
 			if (equivalentStatement == null)
 			{
 				// Stop copying statements after the continue, since they would be unreachable.
@@ -363,7 +441,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				break;
 			}
 		}
-				
+					
 		methodBody.getStmts().addAll(loopBodyStatements);
 		
 		if (hasFirstLevelReturnOrThrowStatement)
@@ -373,7 +451,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 			// Otherwise, they would be unreachable code.
 			return methodBody;
 		}
-		
+	
 		methodBody.getStmts().add(recursionIf);
 		methodBody.getStmts().add(returnResultArray);
 		
@@ -399,7 +477,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		return recursiveMethodModifiers;
 	}
-
+	
 	/**
 	 * Given a statement from a loop's body, returns the equivalent statement for the body of a recursive method.
 	 * @param stmt The statement to transform.
@@ -521,5 +599,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		WHILE,
 		DO_WHILE,
 		FOR,
+		FOREACH,
 	}
 }
