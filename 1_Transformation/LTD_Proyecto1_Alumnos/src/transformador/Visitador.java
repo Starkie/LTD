@@ -326,53 +326,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ArrayCreationExpr createResultArray = new ArrayCreationExpr(methodReturnType.getType(), methodReturnType.getArrayCount(), arrayInitializerExpr);
 		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
 
-		boolean anyTopLevelReturn = false;
-		boolean anyTopLevelThrows = false;
-		
-		// The body of the method begins with the code of the loop iteration.
-		List<Statement> loopBodyStatements = new ArrayList<Statement>();
-		
-		// Clone the loop body inside the method body, to avoid modifying the original.
-		for (Statement stmt : loopBody.getStmts())
-		{
-			// Any return statement should be replaced with the equivalent
-			// recursive method result return statement.
-			if (stmt instanceof ReturnStmt
-				|| stmt instanceof BreakStmt)
-			{
-				anyTopLevelReturn = true;
-				
-				loopBodyStatements.add(returnResultArray);
-			}
-			else if (stmt instanceof ContinueStmt)
-			{
-				// Stop copying statements after the continue, since they would be unreachable.
-				break;
-			}
-			else if (stmt instanceof ThrowStmt)
-			{
-				// Stop copying statements after the throws, since they would be unreachable.
-				anyTopLevelThrows = true;
-				loopBodyStatements.add(stmt);
-				
-				break;
-			}
-			else
-			{
-				loopBodyStatements.add(stmt);
-			}
-		}
-				
-		methodBody.getStmts().addAll(loopBodyStatements);
-		
-		if (anyTopLevelReturn || anyTopLevelThrows)
-		{
-			// Since there was a first-level return statement, it makes no
-			// sense to add the rest of the loop statements.
-			// Otherwise, they would be unreachable code.
-			return methodBody;
-		}
-		
 		// Builds the if statement that contains the recursive method call. If the loop continue is still true, 
 		// proceeds to a new iteration:
 		//
@@ -382,7 +335,45 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ReturnStmt returnRecursiveCallResult = new ReturnStmt(recursiveMethodCall);
 		IfStmt recursionIf = new IfStmt(loopCondition, blockWrapper(returnRecursiveCallResult), null);
 		recursionIf.setCondition(loopCondition);
-	
+
+		boolean hasFirstLevelReturnOrThrowStatement = false;
+		
+		// The body of the method begins with the code of the loop iteration.
+		List<Statement> loopBodyStatements = new ArrayList<Statement>();
+		
+		// Clone the loop body inside the method body, to avoid modifying the original.
+		for (Statement stmt : loopBody.getStmts())
+		{
+			Statement equivalentStatement = getEquivalentStatement(stmt, recursionIf, returnResultArray);
+				
+			if (equivalentStatement == null)
+			{
+				// Stop copying statements after the continue, since they would be unreachable.
+				break;
+			}
+			
+			loopBodyStatements.add(equivalentStatement);
+			
+			if (equivalentStatement instanceof ReturnStmt
+					|| equivalentStatement instanceof ThrowStmt)
+			{
+				// Stop copying statements after this statement, since they would be unreachable.
+				hasFirstLevelReturnOrThrowStatement = true;
+				
+				break;
+			}
+		}
+				
+		methodBody.getStmts().addAll(loopBodyStatements);
+		
+		if (hasFirstLevelReturnOrThrowStatement)
+		{
+			// Since there was a first-level return statement, it makes no
+			// sense to add the rest of the loop statements.
+			// Otherwise, they would be unreachable code.
+			return methodBody;
+		}
+		
 		methodBody.getStmts().add(recursionIf);
 		
 		methodBody.getStmts().add(returnResultArray);
@@ -408,6 +399,82 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				: recursiveMethodModifiers;
 		
 		return recursiveMethodModifiers;
+	}
+
+	/**
+	 * Given a statement from a loop's body, returns the equivalent statement for the body of a recursive method.
+	 * @param stmt The statement to transform.
+	 * @param continueStatementReplacement The statement to replace the continue statements.
+	 * @param returnOrBreakStatementReplacement The statement to replace the break or return statements.
+	 * @return The equivalent statement for a recursive method.
+	 */
+	private static Statement getEquivalentStatement(Statement stmt, Statement continueStatementReplacement, Statement returnOrBreakStatementReplacement)
+	{
+		return getEquivalentStatement(stmt, continueStatementReplacement, returnOrBreakStatementReplacement, true);
+	}
+
+	/**
+	 * Recursive method that transform statements from a loop's body into their equivalent statement for the body of a recursive method.
+	 * @param stmt The statement to transform.
+	 * @param continueStatementReplacement The statement to replace the continue statements.
+	 * @param returnOrBreakStatementReplacement The statement to replace the break or return statements.
+	 * @param isTopLevelCall Indicates if it is the top level call of the recursion. Has an effect on how some instructions are transformed.
+	 * @return The equivalent statement for a recursive method.
+	 */
+	private static Statement getEquivalentStatement(Statement stmt, Statement continueStatementReplacement, Statement returnOrBreakStatementReplacement, boolean isTopLevelCall)
+	{
+		Statement result = stmt;
+		
+		if (stmt instanceof BlockStmt)
+		{
+			BlockStmt block = (BlockStmt)stmt;
+			List<Statement> blockStatements = block.getStmts();
+			
+			if (blockStatements.size() == 0)
+			{
+				return block;
+			}
+			// Transform the block instructions recursively.
+			ArrayList<Statement> newBlockStatements = new ArrayList<Statement>();
+			BlockStmt newBlock = new BlockStmt(newBlockStatements);
+			
+			for (Statement s : blockStatements)
+			{
+				newBlockStatements.add(getEquivalentStatement(s, continueStatementReplacement, returnOrBreakStatementReplacement, false));
+			}
+			
+			return newBlock;
+		}
+		
+		// Any return statement should be replaced with the equivalent
+		// recursive method result return statement.
+		if (stmt instanceof ReturnStmt
+			|| stmt instanceof BreakStmt)
+		{				
+			result = returnOrBreakStatementReplacement;
+		}
+		else if (stmt instanceof ContinueStmt)
+		{		
+			// If the continue statement is not in a top-level statement, it should be replaced with the continue replacement statement.
+			result = isTopLevelCall? 
+					null 
+					: continueStatementReplacement;
+		}
+		else if (stmt instanceof IfStmt)
+		{
+			// Stop copying statements after the continue, since they would be unreachable.
+			IfStmt ifStmt = (IfStmt) stmt;
+			
+			IfStmt newIfStmt = new IfStmt(
+					ifStmt.getCondition(),
+					getEquivalentStatement(ifStmt.getThenStmt(), continueStatementReplacement, returnOrBreakStatementReplacement, false),
+					getEquivalentStatement(ifStmt.getElseStmt(), continueStatementReplacement, returnOrBreakStatementReplacement, false));
+			
+			return newIfStmt;
+		
+		}
+		
+		return result;
 	}
 
 	// Dada un tipo, 
