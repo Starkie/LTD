@@ -1,6 +1,7 @@
 package transformador;
 	
 import iter2rec.transformation.loop.Do;
+import iter2rec.transformation.loop.For;
 import iter2rec.transformation.loop.Loop;
 import iter2rec.transformation.loop.While;
 import iter2rec.transformation.variable.LoopVariables;
@@ -31,6 +32,7 @@ import japa.parser.ast.stmt.BreakStmt;
 import japa.parser.ast.stmt.ContinueStmt;
 import japa.parser.ast.stmt.DoStmt;
 import japa.parser.ast.stmt.ExpressionStmt;
+import japa.parser.ast.stmt.ForStmt;
 import japa.parser.ast.stmt.IfStmt;
 import japa.parser.ast.stmt.ReturnStmt;
 import japa.parser.ast.stmt.Statement;
@@ -101,7 +103,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Creamos un objeto Loop que sirve para examinar bucles
 		Loop loop = new While(null, null, whileStmt);
 		
-		return transformLoopsToRecursiveMethods(loop, whileStmt.getCondition(), blockWrapper(whileStmt.getBody()), LoopType.WHILE);
+		return transformLoopsToRecursiveMethods(loop, LoopType.WHILE, whileStmt.getCondition(), blockWrapper(whileStmt.getBody()), null);
 	}
 	
 	// Visitador de sentencias "do-while"
@@ -110,18 +112,48 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Creamos un objeto Loop que sirve para examinar bucles
 		Loop loop = new Do(null, null, doStmt);
 				
-		return transformLoopsToRecursiveMethods(loop, doStmt.getCondition(), blockWrapper(doStmt.getBody()), LoopType.DO_WHILE);
+		return transformLoopsToRecursiveMethods(loop, LoopType.DO_WHILE, doStmt.getCondition(), blockWrapper(doStmt.getBody()), null);
 	}
+	
+	// Visitador de sentencias "for"
+	public Node visit(ForStmt forStmt, Object args)
+	{
+		// Creamos un objeto Loop que sirve para examinar bucles
+		Loop loop = new For(null, null, forStmt);
+		
+		// Convert the initialization expressions to statements.
+		List<Statement> initStatements = forStmt.getInit()
+				.stream()
+				.map(i -> new ExpressionStmt(i))
+				.collect(Collectors.toList());
+		
+		List<Statement> originalBodyStatements = blockWrapper(forStmt.getBody()).getStmts();
+		
+		List<Statement> loopBodyStmts = new ArrayList<Statement>(originalBodyStatements);
+		BlockStmt forBody = new BlockStmt(loopBodyStmts);
+		
+		// Add the update statements to the end of the body.
+		List<Statement> updateStatements = forStmt.getUpdate()
+				.stream()
+				.map(u -> new ExpressionStmt(u))
+				.collect(Collectors.toList());
+		
+		loopBodyStmts.addAll(updateStatements);
+				
+		return transformLoopsToRecursiveMethods(loop, LoopType.FOR, forStmt.getCompare(), forBody, initStatements);
+	}
+	
 	
 	/**
 	 * Transforms the given loop condition into an equivalent tail-recursive method. 
 	 * @param loop The loop object, used to analyse its variable references. 
+	 * @param loopType The type of the loop. It affects the generated code depending on the loop.
 	 * @param loopCondition The expression of the condition to continue iterating in the loop.
 	 * @param loopBody The body of the loop. Contains all the instructions that could be executed in an iteration.
-	 * @param loopType The type of the loop. It affects the generated code depending on the loop.
+	 * @param loopInitialization ('For loops' only) The initialization statements for the loop.
 	 * @return The node node with the equivalent method call, used to replace the loop statement.
 	 */
-	private Node transformLoopsToRecursiveMethods(Loop loop, Expression loopCondition, BlockStmt loopBody, LoopType loopType) {
+	private Node transformLoopsToRecursiveMethods(Loop loop, LoopType loopType, Expression loopCondition, BlockStmt loopBody, List<Statement> loopInitialization) {
 		/**************************/
 		/******** LLAMADOR ********/
 		/**************************/		
@@ -165,6 +197,17 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		
 		IfStmt newIf = new IfStmt(loopCondition, new BlockStmt(ifBlockStatements), null);
 		
+		Statement result = newIf;
+		
+		if (loopType == LoopType.FOR)
+		{
+			ArrayList<Statement> blockStatements = new ArrayList<Statement>();
+			result = new BlockStmt(blockStatements);
+			
+			blockStatements.addAll(loopInitialization);
+			blockStatements.add(newIf);
+		}
+		
 		/**************************/
 		/********* METODO *********/
 		/**************************/
@@ -188,7 +231,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// Añadimos el nuevo método a la clase actual
 		this.classDeclaration.getMembers().add(newMethod);
 		
-		return newIf;
+		return result;
 	}
 	
 	/**
@@ -383,5 +426,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	{
 		WHILE,
 		DO_WHILE,
+		FOR,
 	}
 }
