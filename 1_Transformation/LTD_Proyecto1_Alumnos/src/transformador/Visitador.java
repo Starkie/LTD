@@ -231,7 +231,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				Arrays.asList(new NameExpr("Exception")) 
 				: null;
 		
-		// If the top level method does not have a throws statement, it should be added.
+		// If the top level method does not have a throws statement in its declaration, it should be added.
 		if (loopMethodThrows != null && loopMethodThrows.size() > 0
 				&& (this.methodDeclaration.getThrows() == null 
 				|| this.methodDeclaration.getThrows().size() == 0))
@@ -375,7 +375,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		}
 		
 		methodBody.getStmts().add(recursionIf);
-		
 		methodBody.getStmts().add(returnResultArray);
 		
 		return methodBody;
