@@ -221,12 +221,31 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 
 		MethodDeclaration newMethod = new MethodDeclaration();
 		
+		// Check if the method has any throws statement.
+		long numberOfThrows = methodBody.getStmts()
+				.stream()
+				.filter(stmt -> stmt instanceof ThrowStmt)
+				.count();
+		
+		List<NameExpr> loopMethodThrows = numberOfThrows > 0? 
+				Arrays.asList(new NameExpr("Exception")) 
+				: null;
+		
+		// If the top level method does not have a throws statement, it should be added.
+		if (loopMethodThrows != null && loopMethodThrows.size() > 0
+				&& (this.methodDeclaration.getThrows() == null 
+				|| this.methodDeclaration.getThrows().size() == 0))
+		{
+			this.methodDeclaration.setThrows(loopMethodThrows);
+		}	
+		
 		newMethod.setBody(methodBody);
 		newMethod.setModifiers(recursiveMethodModifiers);
 		newMethod.setName(methodName);
 		newMethod.setParameters(methodParameters);
 		newMethod.setType(methodReturnType.getType());
 		newMethod.setArrayCount(methodReturnType.getArrayCount());	
+		newMethod.setThrows(loopMethodThrows);
 		
 		// Añadimos el nuevo método a la clase actual
 		this.classDeclaration.getMembers().add(newMethod);
@@ -308,6 +327,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		ReturnStmt returnResultArray = new ReturnStmt(createResultArray);
 
 		boolean anyTopLevelReturn = false;
+		boolean anyTopLevelThrows = false;
 		
 		// The body of the method begins with the code of the loop iteration.
 		List<Statement> loopBodyStatements = new ArrayList<Statement>();
@@ -329,6 +349,14 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				// Stop copying statements after the continue, since they would be unreachable.
 				break;
 			}
+			else if (stmt instanceof ThrowStmt)
+			{
+				// Stop copying statements after the throws, since they would be unreachable.
+				anyTopLevelThrows = true;
+				loopBodyStatements.add(stmt);
+				
+				break;
+			}
 			else
 			{
 				loopBodyStatements.add(stmt);
@@ -337,7 +365,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				
 		methodBody.getStmts().addAll(loopBodyStatements);
 		
-		if (anyTopLevelReturn)
+		if (anyTopLevelReturn || anyTopLevelThrows)
 		{
 			// Since there was a first-level return statement, it makes no
 			// sense to add the rest of the loop statements.
