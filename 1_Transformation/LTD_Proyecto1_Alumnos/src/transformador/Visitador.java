@@ -1,5 +1,12 @@
 package transformador;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import iter2rec.transformation.loop.Do;
 import iter2rec.transformation.loop.For;
 import iter2rec.transformation.loop.Foreach;
@@ -8,7 +15,6 @@ import iter2rec.transformation.loop.While;
 import iter2rec.transformation.variable.LoopVariables;
 import iter2rec.transformation.variable.Variable;
 import japa.parser.ast.Node;
-import japa.parser.ast.body.BodyDeclaration;
 import japa.parser.ast.body.ClassOrInterfaceDeclaration;
 import japa.parser.ast.body.MethodDeclaration;
 import japa.parser.ast.body.ModifierSet;
@@ -19,13 +25,12 @@ import japa.parser.ast.expr.ArrayAccessExpr;
 import japa.parser.ast.expr.ArrayCreationExpr;
 import japa.parser.ast.expr.ArrayInitializerExpr;
 import japa.parser.ast.expr.AssignExpr;
-import japa.parser.ast.expr.BinaryExpr;
 import japa.parser.ast.expr.AssignExpr.Operator;
+import japa.parser.ast.expr.BinaryExpr;
 import japa.parser.ast.expr.CastExpr;
 import japa.parser.ast.expr.Expression;
 import japa.parser.ast.expr.FieldAccessExpr;
 import japa.parser.ast.expr.IntegerLiteralExpr;
-import japa.parser.ast.expr.LiteralExpr;
 import japa.parser.ast.expr.MethodCallExpr;
 import japa.parser.ast.expr.NameExpr;
 import japa.parser.ast.expr.ThisExpr;
@@ -50,13 +55,6 @@ import japa.parser.ast.type.ReferenceType;
 import japa.parser.ast.type.Type;
 import japa.parser.ast.visitor.ModifierVisitorAdapter;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class Visitador extends ModifierVisitorAdapter<Object>
 {
 	/********************************************************/
@@ -66,7 +64,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	// Usamos un contador para numerar los métodos que creemos
 	int contador=1;
 	// Usamos un contador para numerar los index que creemos
-	int contador_index=1;
+	int contador_variable=1;
 	// Variable usada para conocer la lista de métodos visitados
 	LinkedList<MethodDeclaration> previousMethodDeclarations = new LinkedList<MethodDeclaration>();
 	// Variable usada para saber cuál es el último método visitado (el que estoy visitando ahora)
@@ -169,7 +167,9 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		// into an equivalent recursive method.
 
 		// Declare the counter variable: int index = 0;
-		String indexVariableName = "index_" + contador_index++;
+
+		// TODO: Aplicar el visitador a si mismo.
+		String indexVariableName = getAvailableVariableName(loop, "index");
 
 		PrimitiveType integerType = new PrimitiveType(Primitive.Int);
 		VariableDeclaratorId indexVariableId = new VariableDeclaratorId(indexVariableName);
@@ -209,6 +209,31 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	}
 
 	/**
+	 * Finds a variable name for the loop index that does not clash with any existing variable.
+	 * @param loop The loop.
+	 * @return A new variable name.
+	 */
+	private String getAvailableVariableName(Loop loop, String variableNamePrefix) {
+		// Get the name of the used variables used in the loop.
+		List<Variable> variables = loop.getUsedVariables(methodDeclaration);
+
+		List<String> variableNames = variables
+				.stream()
+				.map(v -> v.getName())
+				.collect(Collectors.toList());
+
+		String variableName = variableNamePrefix;
+
+		// Find a variable name that does not clash with the existing variables.
+		while (variableNames.contains(variableName))
+		{
+			variableName = variableNamePrefix + "_" + contador_variable++;
+		}
+
+		return variableName;
+	}
+
+	/**
 	 * Transforms the given loop condition into an equivalent tail-recursive method.
 	 * @param loop The loop object, used to analyse its variable references.
 	 * @param loopType The type of the loop. It affects the generated code depending on the loop.
@@ -222,6 +247,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		/**************************/
 		/******** LLAMADOR ********/
 		/**************************/
+
+		// TODO: Comrobar que el método no exista ya, y el nombre de la variable del foreach
 
 		// Nombre del método que crearemos por cada sentencia "while"
 		String methodName = "metodo_"+contador++;
@@ -252,8 +279,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 			ifBlockStatements.add(blockWrapper(loopBody));
 		}
 
-		// TODO: Check that there are no variables named result already in the scope.
-		String methodCallResultName = "result";
+		String methodCallResultName = getAvailableVariableName(loop, "result");
 
 		boolean isCallerMethodStatic = (this.methodDeclaration.getModifiers() & ModifierSet.STATIC) != 0;
 		Expression methodCallScope = isCallerMethodStatic ? null : new ThisExpr();
