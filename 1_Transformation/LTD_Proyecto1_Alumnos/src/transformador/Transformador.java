@@ -20,7 +20,13 @@ public class Transformador {
 	public static boolean transformFile(File fIn, File fOut) {
 		try {
 			CompilationUnit cu = JavaParser.parse(fIn);
-			new Visitador().visit(cu, null);
+			
+			// Use a visitor to analyse the method names already used.
+			MethodVisitor methodVisitor = new MethodVisitor();
+			methodVisitor.visit(cu, null);
+			
+			new Visitador(methodVisitor.getMethodNames()).visit(cu, null);
+			
 			FileWriter fw = new FileWriter(fOut);
 			fw.write(cu.toString());
 			fw.close();
