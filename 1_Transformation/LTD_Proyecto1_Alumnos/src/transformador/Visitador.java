@@ -74,9 +74,16 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 	// Variable usada para saber cuál es la última clase visitada (la que estoy visitando ahora)
 	ClassOrInterfaceDeclaration classDeclaration;
 
+	// The collection of method names that have already been used.
+	private List<String> usedMethodNames;
+
 	/********************************************************/
 	/*********************** Metodos ************************/
 	/********************************************************/
+
+	public Visitador(List<String> usedMethodNames) {
+		this.usedMethodNames = usedMethodNames;
+	}
 
 	// Visitador de clases
 	// Este visitador no hace nada, simplemente registra en una lista las clases que se van visitando
@@ -90,6 +97,7 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 
 		return newClassDeclaration;
 	}
+
 	// Visitador de métodos
 	// Este visitador no hace nada, simplemente registra en una lista los métodos que se van visitando
 	public Node visit(MethodDeclaration methodDeclaration, Object args)
@@ -168,7 +176,6 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 
 		// Declare the counter variable: int index = 0;
 
-		// TODO: Aplicar el visitador a si mismo.
 		String indexVariableName = getAvailableVariableName(loop, "index");
 
 		PrimitiveType integerType = new PrimitiveType(Primitive.Int);
@@ -222,13 +229,14 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 				.map(v -> v.getName())
 				.collect(Collectors.toList());
 
-		String variableName = variableNamePrefix;
-
 		// Find a variable name that does not clash with the existing variables.
-		while (variableNames.contains(variableName))
+		String variableName;
+
+		do
 		{
 			variableName = variableNamePrefix + "_" + contador_variable++;
 		}
+		while (variableNames.contains(variableName));
 
 		return variableName;
 	}
@@ -247,11 +255,8 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		/**************************/
 		/******** LLAMADOR ********/
 		/**************************/
-
-		// TODO: Comrobar que el método no exista ya, y el nombre de la variable del foreach
-
-		// Nombre del método que crearemos por cada sentencia "while"
-		String methodName = "metodo_"+contador++;
+        // Nombre del método que crearemos por cada sentencia "while"
+		String methodName = getMethodName("metodo");
 
 		// El objeto Loop nos calcula la lista de variables declaradas en el método y usadas en el bucle (la intersección)
 		List<Variable> variables = loop.getUsedVariables(methodDeclaration);
@@ -355,6 +360,25 @@ public class Visitador extends ModifierVisitorAdapter<Object>
 		this.classDeclaration.getMembers().add(newMethod);
 
 		return result;
+	}
+
+	/**
+	 * Returns a method name that does not clash with an existing method.
+	 * @param methodNamePrefix The prefix to use in the method name.
+	 * @return The method name.
+	 */
+	private String getMethodName(String methodNamePrefix) {
+		String methodName = methodNamePrefix;
+
+		// Find a variable name that does not clash with the existing variables.
+		while (usedMethodNames.contains(methodName))
+		{
+			methodName = methodNamePrefix + "_" + contador++;
+		}
+
+		this.usedMethodNames.add(methodName);
+
+		return methodName;
 	}
 
 	/**
