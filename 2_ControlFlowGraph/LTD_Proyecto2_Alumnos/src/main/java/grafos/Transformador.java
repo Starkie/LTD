@@ -1,6 +1,7 @@
 package grafos;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,10 +15,34 @@ public class Transformador {
 
 	public static void main(String[] args) throws Exception {
 		// Ruta del fichero con el programa que vamos a transformar
-		String ruta = "./src/main/java/ejemplos/Bucles_6";
+		String ruta = "./src/main/java/ejemplos";
 		
-		// Abrimos el fichero original (un ".java")
-		File original = new File(ruta + ".java");
+		File folder = new File(ruta);
+		
+		if (!folder.isDirectory())
+		{
+			transformFile(ruta);
+			
+			return;			
+		}
+		
+		transformFolder(folder);
+	}
+
+	private static void transformFolder(File folder) throws FileNotFoundException {
+		for (File f : folder.listFiles()) {
+			if (f.isDirectory()) {
+				transformFolder(f);				
+			}
+			else if (f.getName().endsWith(".java"))
+			{
+				transformFile(f.getAbsolutePath());
+			}
+		}
+	}
+
+	private static void transformFile(String ruta) throws FileNotFoundException {
+		File original = new File(ruta);
 		        
 		// Parseamos el fichero original. Se crea una unidad de compilación (un AST).
 		CompilationUnit cu = JavaParser.parse(original);
