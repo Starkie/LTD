@@ -1,13 +1,18 @@
 package grafos;
 	
 import java.util.List;
+import java.util.Stack;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+
+import grafos.nodes.ControlNode;
+import grafos.nodes.ControlNodeType;
 
 
 public class Visitador extends VoidVisitorAdapter<CFG>
@@ -20,6 +25,10 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	int contador=1;
 	String nodoAnterior = "Start";
 	String nodoActual = "";
+	
+	Stack<ControlNode> controlNodes = new Stack<ControlNode>();
+	
+	int exitDepth = 0;
 	
 	/********************************************************/
 	/*********************** Metodos ************************/
@@ -42,15 +51,50 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	@Override
 	public void visit(ExpressionStmt es, CFG cfg)
 	{
+		
 		// Creamos el nodo actual
 		nodoActual = crearNodo(es); 
 				
 		crearArcos(cfg);
+		
+		if (exitDepth > 0)
+		{
+			closeConditions(cfg);
+		}
 				
 		nodoAnterior = nodoActual;
 		
 		// Seguimos visitando...
 		super.visit(es, cfg);
+	}
+
+	private void closeConditions(CFG cfg) {
+		while (this.exitDepth > 0)
+		{
+			ControlNode controlNode = this.controlNodes.pop();
+			this.nodoAnterior = controlNode.getNodeInstruction();
+			
+			crearArcos(cfg);
+			
+			this.exitDepth--;			
+		}
+	}
+	
+	@Override
+	public void visit(IfStmt ifStmt, CFG cfg) {
+		String ifNode = crearNodo("if " + ifStmt.getCondition());
+		
+		this.controlNodes.push(new ControlNode(ControlNodeType.IF,  ifNode));
+		
+		this.nodoActual = ifNode;
+		
+		crearArcos(cfg);
+		
+		this.nodoAnterior = this.nodoActual;
+				
+		super.visit(ifStmt, cfg);
+				
+		this.exitDepth++;
 	}
 	
 	// Añade un arco desde el último nodo hasta el nodo actual (se le pasa como parametro)
@@ -65,7 +109,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	// Crear arcos
 	private void crearArcos(CFG cfg)
 	{
-			añadirArcoSecuencialCFG(cfg);
+		añadirArcoSecuencialCFG(cfg);
 	}
 
 	// Crear nodo
