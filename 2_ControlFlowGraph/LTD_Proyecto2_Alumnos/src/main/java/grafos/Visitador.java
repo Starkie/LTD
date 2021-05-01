@@ -4,9 +4,11 @@ import java.lang.annotation.Inherited;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -140,6 +142,60 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		// The while statement is the node to continue the CFG analysis.
 		this.nodoAnterior = whileNode;
+	}
+	
+	/**
+	 * Visits a {@link ForStmt} and registers all the nodes in the {@link CFG}.
+	 * @param forStmt The for statement to visit.
+	 * @param cfg The control flow graph.
+	 */
+	@Override
+	public void visit(ForStmt forStmt, CFG cfg) {
+		// Add the initialization nodes.
+		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
+		{			
+			this.nodoActual = crearNodo(node);
+			
+			crearArcos(cfg);
+			
+			this.nodoAnterior = this.nodoActual;
+		}
+		
+		String forNode = crearNodo("for " + forStmt.getCompare().get());
+		
+		ControlNode forControlNode = new ControlNode(ControlNodeType.FOR,  forNode);
+		this.controlNodes.push(forControlNode);
+		
+		// Create the arcs with the previous node.
+		this.nodoActual = forNode;
+
+		crearArcos(cfg);
+
+		this.nodoAnterior = forNode;
+
+		// Create the arcs to the 'while' child nodes.
+		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
+		
+		// Add the update statements to the end of the body.
+		List<Statement> updateStatements = forStmt.getUpdate()
+				.stream()
+				.map(u -> new ExpressionStmt(u))
+				.collect(Collectors.toList());
+		
+		forBody.getStatements().addAll(updateStatements);
+		
+		super.visit(forBody, cfg);
+
+		// Create the arc from the last node of the body to the while statement.
+		this.nodoActual = forNode;
+
+		crearArcos(cfg);
+
+		// Remove the while statement from the control nodes, since it is not needed anymore.
+		this.controlNodes.pop();
+
+		// The while statement is the node to continue the CFG analysis.
+		this.nodoAnterior = forNode;
 	}
 	
 	/**
