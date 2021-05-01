@@ -1,8 +1,5 @@
 package grafos.nodes;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Represents a control instruction from a program.
  * These are special nodes that have an effect on how the control graph
@@ -13,7 +10,7 @@ public class ControlNode {
 	private ControlNodeType type;
 	
 	// The nodes that must be used when exiting the control node.
-	private List<String> exitNodes;
+	private String exitNode;
 
 	/**
 	 * Creates a new instance of a {@link ControlNode}.
@@ -22,16 +19,18 @@ public class ControlNode {
 	 */
 	public ControlNode(ControlNodeType type, String exitNode) {
 		this.type = type;
-		this.exitNodes = new ArrayList<String>();
-		
-		this.exitNodes.add(exitNode);
+		this.exitNode = exitNode;
 	}
 
 	public ControlNodeType getType() {
 		return type;
 	}
 
-	public List<String> getExitNodes() {
-		return this.exitNodes;
+	public String getExitNode() {
+		return this.exitNode;
+	}
+	
+	public void setExitNode(String value) {
+		this.exitNode = value;
 	}
 }
