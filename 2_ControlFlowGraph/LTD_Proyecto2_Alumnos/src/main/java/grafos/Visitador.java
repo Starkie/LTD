@@ -11,6 +11,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import grafos.nodes.ControlNode;
@@ -80,7 +81,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		// Create the arcs to the 'if' child nodes.
 		this.nodoAnterior = ifNode;
-		
+
 		ControlNode ifControlNode = new ControlNode(ControlNodeType.IF,  ifNode);
 		this.controlNodes.push(ifControlNode);
 
@@ -101,17 +102,50 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 			super.visit(convertirEnBloque(elseStmt.get()), cfg);
 		}
-		
+
 		// Indicate that this control instruction can be removed from the stack.
 		this.exitDepth++;
 	}
-	
+
+	/**
+	 * Visits a {@link WhileStmt} and registers all the nodes in the {@link CFG}.
+	 * @param whileStmt The while statement to visit.
+	 * @param cfg The control flow graph.
+	 */
+	@Override
+	public void visit(WhileStmt whileStmt, CFG cfg) {
+		String whileNode = crearNodo("while " + whileStmt.getCondition());
+
+		// Create the arcs with the previous node.
+		this.nodoActual = whileNode;
+
+		crearArcos(cfg);
+
+		this.nodoAnterior = whileNode;
+
+		ControlNode whileControlNode = new ControlNode(ControlNodeType.WHILE,  whileNode);
+		this.controlNodes.push(whileControlNode);
+
+		// Create the arcs to the 'while' child nodes.
+		super.visit(convertirEnBloque(whileStmt.getBody()), cfg);
+
+		// Create the arc from the last node of the body to the while statement.
+		this.nodoActual = whileNode;
+
+		crearArcos(cfg);
+
+		// Remove the while statement from the control nodes, since it is not needed anymore.
+		this.controlNodes.pop();
+
+		// The while statement is the node to continue the CFG analysis.
+		this.nodoAnterior = whileNode;
+	}
 
 	// Crear arcos
 	private void crearArcos(CFG cfg)
 	{
 		añadirArcoSecuencialCFG(cfg);
-		
+
 		// Check if any instruction can be exited from the stack.
 		if (exitDepth > 0)
 		{
@@ -127,7 +161,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		String arco = nodoAnterior + "->" + nodoActual + ";";
 		cfg.arcos.add(arco);
 	}
-	
+
 	/**
 	 * Adds to the {@link CFG} the edges to the exit nodes of every {@link ControlNode}
 	 * that can be removed.
@@ -142,14 +176,14 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 			for (String exitNode : controlNode.getExitNodes())
 			{
 				this.nodoAnterior = exitNode;
-	
+
 				añadirArcoSecuencialCFG(cfg);
 			}
 
 			this.exitDepth--;
 		}
 	}
-	
+
 	// Crear nodo
 	// Añade un arco desde el nodo actual hasta el último control
 	private String crearNodo(Object objeto)
@@ -179,5 +213,4 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		return block;
 	}
-
 }
