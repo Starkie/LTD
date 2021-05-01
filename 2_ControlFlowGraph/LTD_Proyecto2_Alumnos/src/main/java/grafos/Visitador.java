@@ -1,5 +1,6 @@
 package grafos;
 
+import java.lang.annotation.Inherited;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
@@ -52,17 +53,10 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	@Override
 	public void visit(ExpressionStmt es, CFG cfg)
 	{
-
 		// Creamos el nodo actual
 		nodoActual = crearNodo(es);
 
 		crearArcos(cfg);
-
-		// Check if any instruction can be exited from the stack.
-		if (exitDepth > 0)
-		{
-			closeConditions(cfg);
-		}
 
 		nodoAnterior = nodoActual;
 
@@ -70,35 +64,28 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		super.visit(es, cfg);
 	}
 
-	private void closeConditions(CFG cfg) {
-		while (this.exitDepth > 0)
-		{
-			ControlNode controlNode = this.controlNodes.pop();
-			this.nodoAnterior = controlNode.getExitNode();
-
-			crearArcos(cfg);
-
-			this.exitDepth--;
-		}
-	}
-
+	/**
+	 * Visits a {@link IfStmt} and registers all the nodes in the {@link CFG}.
+	 * @param ifStmt The if statement to visit.
+	 * @param cfg The control flow graph.
+	 */
 	@Override
 	public void visit(IfStmt ifStmt, CFG cfg) {
 		String ifNode = crearNodo("if " + ifStmt.getCondition());
-
-		ControlNode ifControlNode = new ControlNode(ControlNodeType.IF,  ifNode);
-		this.controlNodes.push(ifControlNode);
 
 		// Create the arcs with the previous node.
 		this.nodoActual = ifNode;
 
 		crearArcos(cfg);
 
-		// Create the arcs to the if children nodes.
+		// Create the arcs to the 'if' child nodes.
 		this.nodoAnterior = ifNode;
+		
+		ControlNode ifControlNode = new ControlNode(ControlNodeType.IF,  ifNode);
+		this.controlNodes.push(ifControlNode);
 
 		// First visit the 'then' statement, that will always be present.
-		super.visit(ifStmt.getThenStmt().asBlockStmt(), cfg);
+		super.visit(convertirEnBloque(ifStmt.getThenStmt()), cfg);
 
 		// If it is present, also visit the 'else' statement.
 		Optional<Statement> elseStmt = ifStmt.getElseStmt();
@@ -107,15 +94,29 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		{
 			// Replace the exit node with a reference to the last node in the 'then' branch.
 			// This way, both branches will converge in the instruction after the if statement.
-			ifControlNode.setExitNode(this.nodoAnterior);
+			List<String> exitNodes = ifControlNode.getExitNodes();
+			exitNodes.set(0, this.nodoAnterior);
 
 			this.nodoAnterior = ifNode;
 
-			super.visit(elseStmt.get().asBlockStmt(), cfg);
+			super.visit(convertirEnBloque(elseStmt.get()), cfg);
 		}
-
+		
 		// Indicate that this control instruction can be removed from the stack.
 		this.exitDepth++;
+	}
+	
+
+	// Crear arcos
+	private void crearArcos(CFG cfg)
+	{
+		añadirArcoSecuencialCFG(cfg);
+		
+		// Check if any instruction can be exited from the stack.
+		if (exitDepth > 0)
+		{
+			addExitEdgesCFG(cfg);
+		}
 	}
 
 	// Añade un arco desde el último nodo hasta el nodo actual (se le pasa como parametro)
@@ -126,13 +127,29 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		String arco = nodoAnterior + "->" + nodoActual + ";";
 		cfg.arcos.add(arco);
 	}
+	
+	/**
+	 * Adds to the {@link CFG} the edges to the exit nodes of every {@link ControlNode}
+	 * that can be removed.
+	 * @param cfg The control flow graph.
+	 */
+	private void addExitEdgesCFG(CFG cfg) {
+		while (this.exitDepth > 0)
+		{
+			ControlNode controlNode = this.controlNodes.pop();
 
-	// Crear arcos
-	private void crearArcos(CFG cfg)
-	{
-		añadirArcoSecuencialCFG(cfg);
+			// Create an edge for each exit node of the control instruction.
+			for (String exitNode : controlNode.getExitNodes())
+			{
+				this.nodoAnterior = exitNode;
+	
+				añadirArcoSecuencialCFG(cfg);
+			}
+
+			this.exitDepth--;
+		}
 	}
-
+	
 	// Crear nodo
 	// Añade un arco desde el nodo actual hasta el último control
 	private String crearNodo(Object objeto)

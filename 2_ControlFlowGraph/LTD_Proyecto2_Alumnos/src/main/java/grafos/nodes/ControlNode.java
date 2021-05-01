@@ -1,24 +1,37 @@
 package grafos.nodes;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a control instruction from a program.
  * These are special nodes that have an effect on how the control graph
  * is generated. 
  */
 public class ControlNode {
+	// The type of the node.
 	private ControlNodeType type;
-	private String nodeInstruction;
+	
+	// The nodes that must be used when exiting the control node.
+	private List<String> exitNodes;
 
-	public ControlNode(ControlNodeType type, String nodeInstruction) {
+	/**
+	 * Creates a new instance of a {@link ControlNode}.
+	 * @param type The type of the control node.
+	 * @param exitNode The node that must be used when exiting the control node.
+	 */
+	public ControlNode(ControlNodeType type, String exitNode) {
 		this.type = type;
-		this.nodeInstruction = nodeInstruction;
+		this.exitNodes = new ArrayList<String>();
+		
+		this.exitNodes.add(exitNode);
 	}
 
 	public ControlNodeType getType() {
 		return type;
 	}
 
-	public String getNodeInstruction() {
-		return nodeInstruction;
+	public List<String> getExitNodes() {
+		return this.exitNodes;
 	}
 }
