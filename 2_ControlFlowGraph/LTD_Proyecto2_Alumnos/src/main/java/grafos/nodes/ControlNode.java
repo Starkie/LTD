@@ -9,7 +9,7 @@ public class ControlNode {
 	private ControlNodeType type;
 	private String nodeInstruction;
 
-	protected ControlNode(ControlNodeType type, String nodeInstruction) {
+	public ControlNode(ControlNodeType type, String nodeInstruction) {
 		this.type = type;
 		this.nodeInstruction = nodeInstruction;
 	}
