@@ -10,7 +10,7 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 
-public class Visitador extends VoidVisitorAdapter<CFG cfg>
+public class Visitador extends VoidVisitorAdapter<CFG>
 {	
 	/********************************************************/
 	/********************** Atributos ***********************/
@@ -34,7 +34,7 @@ public class Visitador extends VoidVisitorAdapter<CFG cfg>
 		super.visit(methodDeclaration, cfg);
 		
 		// Añadimos el nodo final al CFG
-		collector.add(nodoAnterior+"-> Stop;");
+		cfg.arcos.add(nodoAnterior+"-> Stop;");
 	}
 	
 	// Visitador de expresiones
@@ -82,7 +82,7 @@ public class Visitador extends VoidVisitorAdapter<CFG cfg>
 	}
 	
 	// Dada una sentencia, 
-	// Si es una �nica instrucci�n, devuelve un bloque equivalente 
+	// Si es una única instrucción, devuelve un bloque equivalente 
 	// Si es un bloque, lo devuelve
 	private BlockStmt convertirEnBloque(Statement statement)
 	{
