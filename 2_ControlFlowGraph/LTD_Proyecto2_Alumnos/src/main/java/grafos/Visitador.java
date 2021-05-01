@@ -70,7 +70,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	}
 
 	/**
-	 * Visits a {@link IfStmt} and registers all the nodes in the {@link CFG}.
+	 * Visits a {@link IfStmt} and registers all the nodes into the {@link CFG}.
 	 * @param ifStmt The if statement to visit.
 	 * @param cfg The control flow graph.
 	 */
@@ -111,7 +111,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	}
 
 	/**
-	 * Visits a {@link WhileStmt} and registers all the nodes in the {@link CFG}.
+	 * Visits a {@link WhileStmt} and registers all the nodes into the {@link CFG}.
 	 * @param whileStmt The while statement to visit.
 	 * @param cfg The control flow graph.
 	 */
@@ -119,39 +119,23 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	public void visit(WhileStmt whileStmt, CFG cfg) {
 		String whileNode = crearNodo("while " + whileStmt.getCondition());
 
-		// Create the arcs with the previous node.
-		this.nodoActual = whileNode;
-
-		crearArcos(cfg);
-
-		this.nodoAnterior = whileNode;
-
 		ControlNode whileControlNode = new ControlNode(ControlNodeType.WHILE,  whileNode);
 		this.controlNodes.push(whileControlNode);
-
-		// Create the arcs to the 'while' child nodes.
-		super.visit(convertirEnBloque(whileStmt.getBody()), cfg);
-
-		// Create the arc from the last node of the body to the while statement.
-		this.nodoActual = whileNode;
-
-		crearArcos(cfg);
-
-		// Remove the while statement from the control nodes, since it is not needed anymore.
+		
+		visitLoop(whileStmt.getBody(), cfg, whileNode);
+		
+		// Remove the while control node since it is not needed anymore.
 		this.controlNodes.pop();
-
-		// The while statement is the node to continue the CFG analysis.
-		this.nodoAnterior = whileNode;
 	}
 	
 	/**
-	 * Visits a {@link ForStmt} and registers all the nodes in the {@link CFG}.
+	 * Visits a {@link ForStmt} and registers all the nodes into the {@link CFG}.
 	 * @param forStmt The for statement to visit.
 	 * @param cfg The control flow graph.
 	 */
 	@Override
 	public void visit(ForStmt forStmt, CFG cfg) {
-		// Add the initialization nodes.
+		// Add the edges for the initialization nodes.
 		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
 		{			
 			this.nodoActual = crearNodo(node);
@@ -165,18 +149,10 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		
 		ControlNode forControlNode = new ControlNode(ControlNodeType.FOR,  forNode);
 		this.controlNodes.push(forControlNode);
-		
-		// Create the arcs with the previous node.
-		this.nodoActual = forNode;
 
-		crearArcos(cfg);
-
-		this.nodoAnterior = forNode;
-
-		// Create the arcs to the 'while' child nodes.
+		// Add the update statements to the end of the body.
 		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
 		
-		// Add the update statements to the end of the body.
 		List<Statement> updateStatements = forStmt.getUpdate()
 				.stream()
 				.map(u -> new ExpressionStmt(u))
@@ -184,22 +160,40 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		
 		forBody.getStatements().addAll(updateStatements);
 		
-		super.visit(forBody, cfg);
-
-		// Create the arc from the last node of the body to the while statement.
-		this.nodoActual = forNode;
-
-		crearArcos(cfg);
-
-		// Remove the while statement from the control nodes, since it is not needed anymore.
+		this.visitLoop(forBody, cfg, forNode);
+		
+		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
-
-		// The while statement is the node to continue the CFG analysis.
-		this.nodoAnterior = forNode;
 	}
 	
 	/**
-	 * Visits a {@link DoStmt} and registers all the nodes in the {@link CFG}.
+	 * Visits the given loop and registers all the nodes into the {@link CFG}.
+	 * @param loopBody The body of the loop.
+	 * @param cfg The control flow graph.
+	 * @param loopNode The node that represents the loop.
+	 */
+	private void visitLoop(Statement loopBody, CFG cfg, String loopNode) {
+		// Create the edges from the previous node to the loop.
+		this.nodoActual = loopNode;
+
+		crearArcos(cfg);
+
+		this.nodoAnterior = loopNode;
+
+		// Create the edges to the loop's child nodes.
+		super.visit(convertirEnBloque(loopBody), cfg);
+
+		// Create the edge from the last node of the body to the loop node.
+		this.nodoActual = loopNode;
+
+		crearArcos(cfg);
+
+		// The CFG analysis continues from the loopNode.
+		this.nodoAnterior = loopNode;
+	}
+	
+	/**
+	 * Visits a {@link DoStmt} and registers all the nodes into the {@link CFG}.
 	 * @param doStmt The do statement to visit.
 	 * @param cfg The control flow graph.
 	 */
