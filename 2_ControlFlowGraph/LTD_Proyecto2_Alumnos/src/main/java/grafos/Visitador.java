@@ -305,10 +305,12 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 			// of another if statement.
 			// The edge should be created after the outer if has exited. Otherwise, the exit edge
 			// from the inner if will point to the else statement of the outer one.
+			int previousToLastElementIndex= this.controlNodes.size() - 2;
+			
 			if (this.controlNodes.size() > 1
 				&& exitDepth == 1
 				&& this.controlNodes.peek().getType() == ControlNodeType.IF
-				&& this.controlNodes.get(1).getType() == ControlNodeType.IF)
+				&& this.controlNodes.get(previousToLastElementIndex).getType() == ControlNodeType.IF)
 			{
 				break;
 			}
