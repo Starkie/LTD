@@ -122,13 +122,13 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		ControlNode whileControlNode = new ControlNode(ControlNodeType.WHILE,  whileNode);
 		this.controlNodes.push(whileControlNode);
-		
+
 		visitLoop(whileStmt.getBody(), cfg, whileNode);
-		
+
 		// Remove the while control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
-	
+
 	/**
 	 * Visits a {@link ForStmt} and registers all the nodes into the {@link CFG}.
 	 * @param forStmt The for statement to visit.
@@ -138,31 +138,31 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	public void visit(ForStmt forStmt, CFG cfg) {
 		// Add the edges for the initialization nodes.
 		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
-		{			
+		{
 			this.nodoActual = crearNodo(node);
-			
+
 			crearArcos(cfg);
-			
+
 			this.nodoAnterior = this.nodoActual;
 		}
-		
+
 		String forNode = crearNodo("for " + forStmt.getCompare().get());
-		
+
 		ControlNode forControlNode = new ControlNode(ControlNodeType.FOR,  forNode);
 		this.controlNodes.push(forControlNode);
 
 		// Add the update statements to the end of the body.
 		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
-		
+
 		List<Statement> updateStatements = forStmt.getUpdate()
 				.stream()
 				.map(u -> new ExpressionStmt(u))
 				.collect(Collectors.toList());
-		
+
 		forBody.getStatements().addAll(updateStatements);
-		
+
 		this.visitLoop(forBody, cfg, forNode);
-		
+
 		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
@@ -210,31 +210,31 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// The CFG analysis continues from the loopNode.
 		this.nodoAnterior = loopNode;
 	}
-	
+
 	/**
 	 * Visits a {@link DoStmt} and registers all the nodes into the {@link CFG}.
 	 * @param doStmt The do statement to visit.
 	 * @param cfg The control flow graph.
 	 */
 	@Override
-	public void visit(DoStmt doStmt, CFG cfg) {		
+	public void visit(DoStmt doStmt, CFG cfg) {
 		ControlNode doWhileControlNode = new ControlNode(ControlNodeType.DO,  null);
 		this.controlNodes.push(doWhileControlNode);
-		
+
 		// Create the arcs to the 'do' statement child nodes.
 		// The first iteration is executed unconditionally.
 		super.visit(convertirEnBloque(doStmt.getBody()), cfg);
-		
+
 		String doWhileNode = crearNodo("while " + doStmt.getCondition());
-		
+
 		// Create the arcs with the previous node.
 		this.nodoActual = doWhileNode;
-		
+
 		crearArcos(cfg);
-		
+
 		// The while statement is the node to continue the CFG analysis.
 		this.nodoAnterior = doWhileNode;
-		
+
 		// Create the edge to loop to the first instruction of the body.
 		this.nodoActual = doWhileControlNode.getExitNode();
 
@@ -248,15 +248,15 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	private void crearArcos(CFG cfg)
 	{
 		añadirArcoSecuencialCFG(cfg);
-		
+
 		// Check if the control stack is empty.
 		if (this.controlNodes.isEmpty())
 		{
 			return;
 		}
-		
+
 		addDoWhileExitNode();
-		
+
 		// Check if any element from the control stack can be removed.
 		if (exitDepth > 0)
 		{
@@ -269,7 +269,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	 */
 	private void addDoWhileExitNode() {
 		ControlNode lastControlNode = this.controlNodes.peek();
-		
+
 		// If the current control node is a Do-While with no exit code, this means that
 		// this must be the first instruction of its body.
 		if (lastControlNode != null
@@ -322,8 +322,8 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 			this.exitDepth--;
 		}
-		
-		// Restore the node that existed before. 
+
+		// Restore the node that existed before.
 		this.nodoAnterior = aux;
 	}
 
