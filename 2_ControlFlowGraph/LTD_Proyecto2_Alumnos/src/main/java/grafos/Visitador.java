@@ -13,6 +13,7 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.ForeachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.WhileStmt;
@@ -165,7 +166,25 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
-	
+
+	/**
+	 * Visits a {@link 	ForeachStmt} and registers all the nodes into the {@link CFG}.
+	 * @param forEachStmt The foreach statement to visit.
+	 * @param cfg The control flow graph.
+	 */
+	@Override
+	public void visit(ForeachStmt forEachStmt, CFG cfg) {
+		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
+
+		ControlNode foreachControlNode = new ControlNode(ControlNodeType.FOREACH,  foreachNode);
+		this.controlNodes.push(foreachControlNode);
+
+		visitLoop(forEachStmt.getBody(), cfg, foreachNode);
+
+		// Remove the for control node since it is not needed anymore.
+		this.controlNodes.pop();
+	}
+
 	/**
 	 * Visits the given loop and registers all the nodes into the {@link CFG}.
 	 * @param loopBody The body of the loop.

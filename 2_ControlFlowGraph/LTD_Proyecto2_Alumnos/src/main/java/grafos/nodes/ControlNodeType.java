@@ -8,5 +8,6 @@ public enum ControlNodeType {
 	IF,
 	WHILE,
 	DO,
-	FOR
+	FOR,
+	FOREACH
 }
