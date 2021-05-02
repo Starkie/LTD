@@ -278,8 +278,22 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	 * @param cfg The control flow graph.
 	 */
 	private void addExitEdgesCFG(CFG cfg) {
+		String aux = this.nodoAnterior;
+
 		while (this.exitDepth > 0)
 		{
+			// Workaround for the case where an if-else statement is nested inside the 'then'
+			// of another if statement.
+			// The edge should be created after the outer if has exited. Otherwise, the exit edge
+			// from the inner if will point to the else statement of the outer one.
+			if (this.controlNodes.size() > 1
+				&& exitDepth == 1
+				&& this.controlNodes.peek().getType() == ControlNodeType.IF
+				&& this.controlNodes.get(1).getType() == ControlNodeType.IF)
+			{
+				break;
+			}
+
 			ControlNode controlNode = this.controlNodes.pop();
 
 			// Create an edge the exit node of the control instruction.
@@ -289,6 +303,9 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 			this.exitDepth--;
 		}
+		
+		// Restore the node that existed before. 
+		this.nodoAnterior = aux;
 	}
 
 	// Crear nodo
