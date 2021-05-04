@@ -24,7 +24,7 @@ import grafos.nodes.ControlNode;
 import grafos.nodes.ControlNodeType;
 
 
-public class Visitador extends VoidVisitorAdapter<CFG>
+public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 {
 	/********************************************************/
 	/********************** Atributos ***********************/

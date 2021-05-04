@@ -51,7 +51,7 @@ public class Transformador {
 		
 		// Recorremos el AST
 		CFG cfg = new CFG();
-		VoidVisitor<CFG> visitador = new Visitador();
+		VoidVisitor<CFG> visitador = new VisitadorCFG();
 		visitador.visit(cu,cfg);
 
 		// Imprimimos el CFG del programa 
