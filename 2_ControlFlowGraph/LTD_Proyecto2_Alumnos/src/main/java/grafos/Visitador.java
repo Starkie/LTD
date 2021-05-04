@@ -34,8 +34,11 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	String nodoAnterior = "Start";
 	String nodoActual = "";
 
+	// The collection of control nodes that we are currently analysing.
+	// Each control node in the stack represents a nesting level.
 	Stack<ControlNode> controlNodes = new Stack<ControlNode>();
 
+	// The amount of control nodes that can be unstacked.
 	int exitDepth = 0;
 
 	/********************************************************/
@@ -104,7 +107,14 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 			this.nodoAnterior = ifNode;
 
+			// Set the exit depth to 0, to avoid unstacking control nodes that cannot be unstacked yet.
+			int aux = this.exitDepth;
+			this.exitDepth = 0;
+
 			super.visit(convertirEnBloque(elseStmt.get()), cfg);
+
+			// Restore the initial exit depth.
+			this.exitDepth = aux;
 		}
 
 		// Indicate that this control instruction can be removed from the stack.
@@ -128,7 +138,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// Remove the while control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
-	
+
 	// TODO: Implement switch?
 
 	/**
@@ -304,21 +314,6 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		while (this.exitDepth > 0)
 		{
-			// Workaround for the case where an if-else statement is nested inside the 'then'
-			// of another if statement.
-			// The edge should be created after the outer if has exited. Otherwise, the exit edge
-			// from the inner if will point to the else statement of the outer one.
-			int previousToLastElementIndex= this.controlNodes.size() - 2;
-			
-            // TODO: Fix the case where there are more instructions after the inner if and we haven't exited the outer if yet.
-			if (this.controlNodes.size() > 1
-				&& exitDepth == 1
-				&& this.controlNodes.peek().getType() == ControlNodeType.IF
-				&& this.controlNodes.get(previousToLastElementIndex).getType() == ControlNodeType.IF)
-			{
-				break;
-			}
-
 			ControlNode controlNode = this.controlNodes.pop();
 
 			// Create an edge the exit node of the control instruction.
