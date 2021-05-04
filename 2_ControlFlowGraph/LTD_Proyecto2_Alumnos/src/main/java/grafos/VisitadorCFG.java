@@ -81,7 +81,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(IfStmt ifStmt, CFG cfg) {
-		String ifNode = crearNodo("if " + ifStmt.getCondition());
+		String ifNode = crearNodo("if (" + ifStmt.getCondition() + ")");
 
 		// Create the arcs with the previous node.
 		this.nodoActual = ifNode;
@@ -129,7 +129,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(WhileStmt whileStmt, CFG cfg) {
-		String whileNode = crearNodo("while " + whileStmt.getCondition());
+		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
 		ControlNodeCFG whileControlNode = new ControlNodeCFG(ControlNodeType.WHILE,  whileNode);
 		this.controlNodes.push(whileControlNode);
@@ -157,7 +157,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 			this.nodoAnterior = this.nodoActual;
 		}
 
-		String forNode = crearNodo("for " + forStmt.getCompare().get());
+		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
 		ControlNodeCFG forControlNode = new ControlNodeCFG(ControlNodeType.FOR,  forNode);
 		this.controlNodes.push(forControlNode);
@@ -185,7 +185,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(ForeachStmt forEachStmt, CFG cfg) {
-		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
+		String foreachNode = crearNodo("foreach (" + forEachStmt.getVariable() + " : " + forEachStmt.getIterable() + ")");
 
 		ControlNodeCFG foreachControlNode = new ControlNodeCFG(ControlNodeType.FOREACH,  foreachNode);
 		this.controlNodes.push(foreachControlNode);
@@ -236,7 +236,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		// The first iteration is executed unconditionally.
 		super.visit(convertirEnBloque(doStmt.getBody()), cfg);
 
-		String doWhileNode = crearNodo("while " + doStmt.getCondition());
+		String doWhileNode = crearNodo("while (" + doStmt.getCondition() + ")");
 
 		// Create the arcs with the previous node.
 		this.nodoActual = doWhileNode;
@@ -263,7 +263,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	@Override
 	public void visit(SwitchStmt switchStmt, CFG cfg) {
 		// Create the edges from the previous node to the switch.
-		String switchNode = crearNodo("switch " + switchStmt.getSelector());
+		String switchNode = crearNodo("switch (" + switchStmt.getSelector() + ")");
 
 		this.nodoActual = switchNode;
 
