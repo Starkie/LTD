@@ -42,7 +42,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	/*********************** Metodos ************************/
 	/********************************************************/
 
-		// Visitador de métodos
+	// Visitador de métodos
 	// Este visitador añade el nodo final al CFG
 	@Override
 	public void visit(MethodDeclaration methodDeclaration, CFG cfg)
@@ -128,6 +128,8 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// Remove the while control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
+	
+	// TODO: Implement switch?
 
 	/**
 	 * Visits a {@link ForStmt} and registers all the nodes into the {@link CFG}.
@@ -174,6 +176,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(ForeachStmt forEachStmt, CFG cfg) {
+		// TODO: Is the ForEachStatement generating ok?
 		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
 
 		ControlNode foreachControlNode = new ControlNode(ControlNodeType.FOREACH,  foreachNode);
