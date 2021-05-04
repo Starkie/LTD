@@ -11,6 +11,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.ForeachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.WhileStmt;
@@ -157,6 +158,30 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Create the edges to the loop's child nodes.
 		super.visit(convertirEnBloque(forBody), programDependencyGraph);
+
+		// Remove the for control node since it is not needed anymore.
+		this.controlNodes.pop();
+	}
+	
+	/**
+	 * Visits a {@link 	ForeachStmt} and registers all the nodes into the {@link CFG}.
+	 * @param forEachStmt The foreach statement to visit.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(ForeachStmt forEachStmt, ProgramDependencyGraph programDependencyGraph) {
+		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
+		
+		// Create the edges from the previous node to the loop.
+		createEdges(foreachNode, programDependencyGraph);
+
+		ControlNodePDG foreachControlNode = new ControlNodePDG(ControlNodeType.FOREACH,  foreachNode);
+		this.controlNodes.push(foreachControlNode);
+		
+		// Create the edges from the loop to itself.
+		createEdges(foreachNode, programDependencyGraph);
+		
+		super.visit(convertirEnBloque(forEachStmt.getBody()), programDependencyGraph);
 
 		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
