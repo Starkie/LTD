@@ -15,6 +15,8 @@ import com.github.javaparser.ast.stmt.ForStmt;
 import com.github.javaparser.ast.stmt.ForeachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntryStmt;
+import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
@@ -73,7 +75,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	@Override
 	public void visit(IfStmt ifStmt, ProgramDependencyGraph programDependencyGraph) {
 		// Create the edges to the if node.
-		String ifNode = crearNodo("if " + ifStmt.getCondition());
+		String ifNode = crearNodo("if (" + ifStmt.getCondition() + ")");
 
 		createEdges(ifNode, programDependencyGraph);
 
@@ -103,7 +105,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 */
 	@Override
 	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
-		String whileNode = crearNodo("while " + whileStmt.getCondition());
+		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
 		// TODO: Can the loops be refactored to a single method?
 
@@ -135,7 +137,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			createEdges(currentNode, programDependencyGraph);
 		}
 
-		String forNode = crearNodo("for " + forStmt.getCompare().get());
+		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
 		// Create the edges from the previous node to the loop.
 		createEdges(forNode, programDependencyGraph);
@@ -167,7 +169,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 */
 	@Override
 	public void visit(ForeachStmt forEachStmt, ProgramDependencyGraph programDependencyGraph) {
-		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
+		String foreachNode = crearNodo("foreach (" + forEachStmt.getVariable() + " : " + forEachStmt.getIterable() + ")");
 
 		// Create the edges from the previous node to the loop.
 		createEdges(foreachNode, programDependencyGraph);
@@ -188,7 +190,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 */
 	@Override
 	public void visit(DoStmt doStmt, ProgramDependencyGraph programDependencyGraph) {
-		String doWhileNode = crearNodo("do-while " + doStmt.getCondition());
+		String doWhileNode = crearNodo("while (" + doStmt.getCondition() + ")");
 
 		// Create the edges from the previous node to the loop.
 		createEdges(doWhileNode, programDependencyGraph);
@@ -201,6 +203,54 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Remove the do-while statement from the control nodes, since it is not needed anymore.
 		this.controlNodes.pop();
 	}
+
+	/**
+	 * Visits a {@link SwitchStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
+	 * @param switchStatement The switch statement.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(SwitchStmt switchStmt, ProgramDependencyGraph programDependencyGraph) {
+		// Create the edges from the previous node to the switch.
+		String switchNode = crearNodo("switch (" + switchStmt.getSelector() + ")");
+
+		createEdges(switchNode, programDependencyGraph);
+
+		// Stack the switch control node.
+		ControlNodePDG switchControlNode = new ControlNodePDG(ControlNodeType.SWITCH,  switchNode);
+		this.controlNodes.push(switchControlNode);
+
+		// Visit all the nested entries.
+		super.visit(switchStmt, programDependencyGraph);
+
+		this.controlNodes.pop();
+	}
+
+	/**
+	 * Visits a {@link SwitchEntryStmt} and registers all the nodes into the {@link CFG}.
+	 * @param switchEntryStatement The switch entry statement.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(SwitchEntryStmt switchEntryStatement, ProgramDependencyGraph programDependencyGraph) {
+		String switchLabel = switchEntryStatement.getLabel().isPresent()?
+				"case " + switchEntryStatement.getLabel().get()
+				: "default";
+
+		String switchEntryNode = crearNodo(switchLabel);
+
+		createEdges(switchEntryNode, programDependencyGraph);
+
+		// Stack the switch control node.
+		ControlNodePDG switchEntryControlNode = new ControlNodePDG(ControlNodeType.SWITCH_CASE,  switchEntryNode);
+		this.controlNodes.push(switchEntryControlNode);
+
+		// Visit the switch entry.
+		super.visit(switchEntryStatement, programDependencyGraph);
+
+		this.controlNodes.pop();
+	}
+
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)

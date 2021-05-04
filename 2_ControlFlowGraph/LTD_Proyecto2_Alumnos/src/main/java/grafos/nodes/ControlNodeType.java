@@ -11,5 +11,6 @@ public enum ControlNodeType {
 	DO,
 	FOR,
 	FOREACH,
-	SWITCH
+	SWITCH,
+	SWITCH_CASE
 }
