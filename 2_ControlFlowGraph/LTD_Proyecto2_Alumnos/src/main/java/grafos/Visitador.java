@@ -115,7 +115,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 			super.visit(convertirEnBloque(elseStmt.get()), cfg);
 
 			// Restore the initial exit depth.
-			this.exitDepth = aux;
+			this.exitDepth += aux;
 		}
 
 		// Indicate that this control instruction can be removed from the stack.
