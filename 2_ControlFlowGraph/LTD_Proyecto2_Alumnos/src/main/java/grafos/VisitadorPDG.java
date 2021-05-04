@@ -58,6 +58,37 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		super.visit(expressionStmt, programDependencyGraph);
 	}
 
+	/**
+	 * Visits an {@link IfStmt} and registers all its child nodes into the {@link ProgramDependencyGraph}.
+	 * @param ifStmt The if statement to visit.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(IfStmt ifStmt, ProgramDependencyGraph programDependencyGraph) {
+		// Create the edges to the if node.
+		String ifNode = crearNodo("if " + ifStmt.getCondition());
+
+		createEdges(ifNode, programDependencyGraph);
+
+		// Push the if control node to the stack.
+		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
+		this.controlNodes.push(ifControlNode);
+
+		// First visit the 'then' statement, that will always be present.
+		super.visit(convertirEnBloque(ifStmt.getThenStmt()), programDependencyGraph);
+
+		// If it is present, also visit the 'else' statement.
+		Optional<Statement> elseStmt = ifStmt.getElseStmt();
+
+		if (elseStmt.isPresent())
+		{
+			super.visit(convertirEnBloque(elseStmt.get()), programDependencyGraph);
+		}
+
+		// Pop the node since it's not needed anymore.
+		this.controlNodes.pop();
+	}
+
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
