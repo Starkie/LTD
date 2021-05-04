@@ -3,15 +3,20 @@ package grafos;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
+import grafos.nodes.ControlNodeCFG;
 import grafos.nodes.ControlNodePDG;
 import grafos.nodes.ControlNodeType;
 
@@ -88,7 +93,74 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Pop the node since it's not needed anymore.
 		this.controlNodes.pop();
 	}
+	
+	/**
+	 * Visits a {@link WhileStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
+	 * @param whileStmt The while statement to visit.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
+		String whileNode = crearNodo("while " + whileStmt.getCondition());
+		
+		// Create the edges from the previous node to the loop.
+		createEdges(whileNode, programDependencyGraph);
 
+		ControlNodePDG whileControlNode = new ControlNodePDG(ControlNodeType.WHILE,  whileNode);
+		this.controlNodes.push(whileControlNode);
+		
+		// Create the edges from the loop to itself.
+		createEdges(whileNode, programDependencyGraph);
+
+		// Create the edges to the loop's child nodes.
+		super.visit(convertirEnBloque(whileStmt.getBody()), programDependencyGraph);
+
+		// Remove the while control node since it is not needed anymore.
+		this.controlNodes.pop();
+	}
+	
+	/**
+	 * Visits a {@link ForStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
+	 * @param forStmt The for statement to visit.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(ForStmt forStmt, ProgramDependencyGraph programDependencyGraph) {		
+		// Add the edges for the initialization nodes.
+		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
+		{
+			String currentNode = crearNodo(node);
+
+			createEdges(currentNode, programDependencyGraph);
+		}
+
+		String forNode = crearNodo("for " + forStmt.getCompare().get());
+
+		// Create the edges from the previous node to the loop.
+		createEdges(forNode, programDependencyGraph);
+		
+		ControlNodePDG forControlNode = new ControlNodePDG(ControlNodeType.FOR,  forNode);
+		this.controlNodes.push(forControlNode);
+		
+		// Create the edges from the loop node to itself.
+		createEdges(forNode, programDependencyGraph);
+		
+		// Add the update statements to the end of the body.
+		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
+
+		List<Statement> updateStatements = forStmt.getUpdate()
+				.stream()
+				.map(u -> new ExpressionStmt(u))
+				.collect(Collectors.toList());
+
+		forBody.getStatements().addAll(updateStatements);
+
+		// Create the edges to the loop's child nodes.
+		super.visit(convertirEnBloque(forBody), programDependencyGraph);
+
+		// Remove the for control node since it is not needed anymore.
+		this.controlNodes.pop();
+	}
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
