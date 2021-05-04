@@ -9,5 +9,6 @@ public enum ControlNodeType {
 	WHILE,
 	DO,
 	FOR,
-	FOREACH
+	FOREACH,
+	SWITCH
 }

@@ -103,7 +103,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		{
 			// Replace the exit node with a reference to the last node in the 'then' branch.
 			// This way, both branches will converge in the instruction after the if statement.
-			ifControlNode.setExitNode(this.nodoAnterior);
+			ifControlNode.getExitNodes().set(0, this.nodoAnterior);
 
 			this.nodoAnterior = ifNode;
 
@@ -248,8 +248,8 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// The while statement is the node to continue the CFG analysis.
 		this.nodoAnterior = doWhileNode;
 
-		// Create the edge to loop to the first instruction of the body.
-		this.nodoActual = doWhileControlNode.getExitNode();
+		// Create the edges to loop to the first instruction of the body.
+		this.nodoActual = doWhileControlNode.getExitNodes().get(0);
 
 		crearArcos(cfg);
 
@@ -287,11 +287,13 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		// this must be the first instruction of its body.
 		if (lastControlNode != null
 			&& lastControlNode.getType() == ControlNodeType.DO
-			&& lastControlNode.getExitNode() == null)
+			&& lastControlNode.getExitNodes().isEmpty())
 		{
 			// Because the do-while statement needs to loop back to this instruction,
 			// it must be stored for future reference.
-			lastControlNode.setExitNode(this.nodoActual);
+			List<String> exitNodes = lastControlNode.getExitNodes();
+
+			exitNodes.add(this.nodoActual);
 		}
 	}
 
@@ -316,10 +318,13 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		{
 			ControlNode controlNode = this.controlNodes.pop();
 
-			// Create an edge the exit node of the control instruction.
-			this.nodoAnterior = controlNode.getExitNode();
+			// Create an edge for each exit node of the control instruction.
+			for (String exitNode : controlNode.getExitNodes())
+			{
+				this.nodoAnterior = exitNode;
 
-			añadirArcoSecuencialCFG(cfg);
+				añadirArcoSecuencialCFG(cfg);
+			}
 
 			this.exitDepth--;
 		}
