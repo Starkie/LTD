@@ -16,23 +16,23 @@ public class Transformador {
 	public static void main(String[] args) throws Exception {
 		// Ruta del fichero con el programa que vamos a transformar
 		String ruta = "./src/main/java/ejemplos";
-		
+
 		File folder = new File(ruta);
-		
+
 		if (!folder.isDirectory())
 		{
 			transformFile(ruta);
-			
-			return;			
+
+			return;
 		}
-		
+
 		transformFolder(folder);
 	}
 
 	private static void transformFolder(File folder) throws FileNotFoundException {
 		for (File f : folder.listFiles()) {
 			if (f.isDirectory()) {
-				transformFolder(f);				
+				transformFolder(f);
 			}
 			else if (f.getName().endsWith(".java"))
 			{
@@ -43,20 +43,30 @@ public class Transformador {
 
 	private static void transformFile(String ruta) throws FileNotFoundException {
 		File original = new File(ruta);
-		        
+
 		// Parseamos el fichero original. Se crea una unidad de compilación (un AST).
 		CompilationUnit cu = JavaParser.parse(original);
-		
+
 		quitarComentarios(cu);
-		
+
 		// Recorremos el AST
 		CFG cfg = new CFG();
-		VoidVisitor<CFG> visitador = new VisitadorCFG();
-		visitador.visit(cu,cfg);
+		VoidVisitor<CFG> visitadorCFG = new VisitadorCFG();
+		visitadorCFG.visit(cu, cfg);
 
-		// Imprimimos el CFG del programa 
-		String dotInfo = imprimirGrafo(cfg.arcos);
-		
+		printGraph(ruta, cfg.arcos, "CFG");
+
+		ProgramDependencyGraph pdg = new ProgramDependencyGraph();
+		VoidVisitor<ProgramDependencyGraph> visitadorPDG = new VisitadorPDG();
+		visitadorPDG.visit(cu, pdg);
+
+		printGraph(ruta, pdg.controlEdges, "PDG");
+	}
+
+	private static void printGraph(String ruta, List<String> edges, String graphName) {
+		// Imprimimos el grafo del programa
+		String dotInfo = imprimirGrafo(graphName, edges);
+
 		// Generamos un PDF con el CFG del programa
 		System.out.print("\nGenerando PDF...");
 	    GraphViz gv=new GraphViz();
@@ -69,25 +79,25 @@ public class Transformador {
 	    gv.decreaseDpi();
 	    gv.decreaseDpi();
 	    gv.decreaseDpi();
-	    File destino_CFG = new File(ruta + "_CFG."+ type);
-	    gv.writeGraphToFile( gv.getGraph( gv.getDotSource(), type ), destino_CFG);
+	    File destino_GRAPH = new File(ruta + "_" + graphName + "." + type);
+	    gv.writeGraphToFile( gv.getGraph( gv.getDotSource(), type ), destino_GRAPH);
 	    System.out.println("     PDF generado!");
 	}
 
 	// Imprime el grafo en la pantalla
-	private static String imprimirGrafo(List<String> arcos)
+	private static String imprimirGrafo(String graphName, List<String> arcos)
 	{
 		String dotInfo="";
 		for(String arco:arcos) {
-			dotInfo += arco;	
+			dotInfo += arco;
 			System.out.println("ARCO: "+arco);
 		}
-		System.out.println("\nCFG:");
+		System.out.println("\n" + graphName + ":");
 		System.out.println(dotInfo);
 
 		return dotInfo;
 	}
-	
+
 	// Elimina todos los comentarios de un nodo y sus hijos
 	static void quitarComentarios(Node node){
 		node.removeComment();
@@ -100,7 +110,7 @@ public class Transformador {
 	    	quitarComentarios(child);
 	    }
 	}
-	
+
 }
 
 
