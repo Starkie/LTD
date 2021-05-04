@@ -307,6 +307,7 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 			// from the inner if will point to the else statement of the outer one.
 			int previousToLastElementIndex= this.controlNodes.size() - 2;
 			
+            // TODO: Fix the case where there are more instructions after the inner if and we haven't exited the outer if yet.
 			if (this.controlNodes.size() > 1
 				&& exitDepth == 1
 				&& this.controlNodes.peek().getType() == ControlNodeType.IF
