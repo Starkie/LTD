@@ -5,6 +5,7 @@ package grafos.nodes;
  * The type is needed because each of them requires a different treatment.
  */
 public enum ControlNodeType {
+	METHOD,
 	IF,
 	WHILE,
 	DO,
