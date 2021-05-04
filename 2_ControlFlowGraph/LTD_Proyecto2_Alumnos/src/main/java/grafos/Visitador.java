@@ -1,6 +1,5 @@
 package grafos;
 
-import java.lang.annotation.Inherited;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
@@ -16,6 +15,8 @@ import com.github.javaparser.ast.stmt.ForStmt;
 import com.github.javaparser.ast.stmt.ForeachStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntryStmt;
+import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
@@ -139,8 +140,6 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 		this.controlNodes.pop();
 	}
 
-	// TODO: Implement switch?
-
 	/**
 	 * Visits a {@link ForStmt} and registers all the nodes into the {@link CFG}.
 	 * @param forStmt The for statement to visit.
@@ -255,6 +254,77 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 
 		// Remove the while statement from the control nodes, since it is not needed anymore.
 		this.controlNodes.pop();
+	}
+
+	@Override
+	public void visit(SwitchStmt switchStmt, CFG cfg) {
+		// Create the edges from the previous node to the switch.
+		String switchNode = crearNodo("switch " + switchStmt.getSelector());
+
+		this.nodoActual = switchNode;
+
+		crearArcos(cfg);
+
+		// Stack the switch control node.
+		ControlNode switchControlNode = new ControlNode(ControlNodeType.SWITCH,  null);
+		this.controlNodes.push(switchControlNode);
+
+		int aux = 0;
+
+		// Explore each case statement.
+		for (SwitchEntryStmt entry : switchStmt.getEntries())
+		{
+			// Since we are exploring other cases, do not unstack any control nodes from
+			// the previous branches.
+			aux += this.exitDepth;
+			this.exitDepth = 0;
+
+			this.nodoAnterior = switchNode;
+
+			this.visit(entry, cfg);
+		}
+
+		// Remove the current node to avoid adding duplicate transitions.
+		switchControlNode.getExitNodes().remove(this.nodoActual);
+
+		// Restore the actual exit depth.
+		this.exitDepth = aux;
+
+		this.exitDepth++;
+	}
+
+	@Override
+	public void visit(SwitchEntryStmt switchEntryStatement, CFG arg) {
+		String switchLabel = switchEntryStatement.getLabel().isPresent()?
+				"case " + switchEntryStatement.getLabel().get()
+				: "default";
+
+		String switchEntryNode = crearNodo(switchLabel);
+
+		this.nodoActual = switchEntryNode;
+
+		this.crearArcos(arg);
+
+		this.nodoAnterior = switchEntryNode;
+
+		// Visit the switch entry.
+		super.visit(switchEntryStatement, arg);
+
+		// Navigate the stack until the last switch control node is found.
+		ControlNode switchControlNode = null;
+
+		for (int i = this.controlNodes.size() - 1; i >= 0; i--)
+		{
+			switchControlNode = this.controlNodes.get(i);
+
+			if (switchControlNode.getType() == ControlNodeType.SWITCH)
+			{
+				break;
+			}
+		}
+
+		// Add the last visited node to the exit nodes of the switch.
+		switchControlNode.getExitNodes().add(this.nodoActual);
 	}
 
 	// Crear arcos
