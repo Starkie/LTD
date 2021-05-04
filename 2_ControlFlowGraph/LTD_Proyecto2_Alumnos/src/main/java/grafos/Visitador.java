@@ -185,7 +185,6 @@ public class Visitador extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(ForeachStmt forEachStmt, CFG cfg) {
-		// TODO: Is the ForEachStatement generating ok?
 		String foreachNode = crearNodo("foreach " + forEachStmt.getVariable() + " : " + forEachStmt.getIterable());
 
 		ControlNode foreachControlNode = new ControlNode(ControlNodeType.FOREACH,  foreachNode);
