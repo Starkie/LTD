@@ -255,6 +255,11 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		this.controlNodes.pop();
 	}
 
+	/**
+	 * Visits a {@link SwitchStmt} and registers all the nodes into the {@link CFG}.
+	 * @param switchStmt The switch statement.
+	 * @param cfg The control flow graph.
+	 */
 	@Override
 	public void visit(SwitchStmt switchStmt, CFG cfg) {
 		// Create the edges from the previous node to the switch.
@@ -292,14 +297,21 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		this.exitDepth++;
 	}
 
+
+	/**
+	 * Visits a {@link SwitchEntryStmt} and registers all the nodes into the {@link CFG}.
+	 * @param switchEntryStatement The switch entry statement.
+	 * @param cfg The control flow graph.
+	 */
 	@Override
 	public void visit(SwitchEntryStmt switchEntryStatement, CFG arg) {
+		// If it is a case, add the case label. Otherwise add the default label.
 		String switchLabel = switchEntryStatement.getLabel().isPresent()?
 				"case " + switchEntryStatement.getLabel().get()
 				: "default";
 
+		// Create the edges from the previous node to the switch entry.
 		String switchEntryNode = crearNodo(switchLabel);
-
 		this.nodoActual = switchEntryNode;
 
 		this.crearArcos(arg);
