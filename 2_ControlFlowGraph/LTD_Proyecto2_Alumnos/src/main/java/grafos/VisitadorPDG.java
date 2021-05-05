@@ -129,6 +129,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 */
 	@Override
 	public void visit(ForStmt forStmt, ProgramDependencyGraph programDependencyGraph) {
+        // TODO: The initialization edges are controlled by the loop. They must go AFTER
 		// Add the edges for the initialization nodes.
 		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
 		{
