@@ -60,7 +60,11 @@ public class Transformador {
 		VoidVisitor<ProgramDependencyGraph> visitadorPDG = new VisitadorPDG();
 		visitadorPDG.visit(cu, pdg);
 
-		printGraph(ruta, pdg.controlEdges, "PDG");
+		List<String> pdgEdges = new ArrayList<String>(pdg.controlEdges);
+
+		pdgEdges.addAll(pdg.dataEdges);
+
+		printGraph(ruta, pdgEdges, "PDG");
 	}
 
 	private static void printGraph(String ruta, List<String> edges, String graphName) {
