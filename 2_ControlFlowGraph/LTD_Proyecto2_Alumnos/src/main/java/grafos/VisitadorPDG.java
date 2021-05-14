@@ -130,13 +130,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	@Override
 	public void visit(ForStmt forStmt, ProgramDependencyGraph programDependencyGraph) {
         // TODO: The initialization edges are controlled by the loop. They must go AFTER
-		// Add the edges for the initialization nodes.
-		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
-		{
-			String currentNode = crearNodo(node);
-
-			createEdges(currentNode, programDependencyGraph);
-		}
 
 		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
@@ -148,6 +141,14 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Add the update statements to the end of the body.
 		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
+		
+		// Add the edges for the initialization nodes.
+		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
+		{
+			String currentNode = crearNodo(node);
+			
+			createEdges(currentNode, programDependencyGraph);
+		}
 
 		List<Statement> updateStatements = forStmt.getUpdate()
 				.stream()
