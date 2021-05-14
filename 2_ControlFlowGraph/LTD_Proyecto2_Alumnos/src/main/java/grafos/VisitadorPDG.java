@@ -49,6 +49,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	String currentNode = "Entry";
 
 	boolean isInsideAssign = false;
+    boolean isPartOfCondition = false;
 	boolean isParameterOfMethodCall = false;
 
 	/********************************************************/
@@ -101,7 +102,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Only add the variable when visiting from another another node from a special type.
 		if (dataDependencies.containsKey(variableName)
-			&& (this.isInsideAssign || this.isParameterOfMethodCall))
+			&& (this.isInsideAssign || this.isPartOfCondition || this.isParameterOfMethodCall))
 		{
 			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
 		}
@@ -163,6 +164,14 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		String ifNode = crearNodo("if (" + ifStmt.getCondition() + ")");
 
 		createEdges(ifNode, programDependencyGraph);
+
+        // Check the data dependencies inside the condition.
+		this.isPartOfCondition = true;
+
+		this.currentNode = ifNode;
+		super.visit(new ExpressionStmt(ifStmt.getCondition()), programDependencyGraph);
+
+		this.isPartOfCondition = false;
 
 		// Push the if control node to the stack.
 		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
