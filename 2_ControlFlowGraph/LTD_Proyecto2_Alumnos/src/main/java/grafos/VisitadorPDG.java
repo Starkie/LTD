@@ -20,7 +20,6 @@ import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
-import grafos.nodes.ControlNodeCFG;
 import grafos.nodes.ControlNodePDG;
 import grafos.nodes.ControlNodeType;
 
@@ -129,8 +128,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 */
 	@Override
 	public void visit(ForStmt forStmt, ProgramDependencyGraph programDependencyGraph) {
-        // TODO: The initialization edges are controlled by the loop. They must go AFTER
-
 		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
 		// Create the edges from the previous node to the loop.
@@ -141,12 +138,12 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Add the update statements to the end of the body.
 		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
-		
+
 		// Add the edges for the initialization nodes.
 		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
 		{
 			String currentNode = crearNodo(node);
-			
+
 			createEdges(currentNode, programDependencyGraph);
 		}
 
