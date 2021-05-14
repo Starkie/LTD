@@ -1,5 +1,6 @@
 package grafos;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
@@ -7,7 +8,13 @@ import java.util.stream.Collectors;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.expr.AssignExpr.Operator;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -37,12 +44,19 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	// Each control node in the stack represents a nesting level.
 	Stack<ControlNodePDG> controlNodes = new Stack<ControlNodePDG>();
 
+	HashMap<String, String> dataDependencies = new HashMap<String, String>();
+
+	String currentNode = "Entry";
+
+	boolean isInsideAssign = false;
+	boolean isParameterOfMethodCall = false;
+
 	/********************************************************/
 	/*********************** Metodos ************************/
 	/********************************************************/
 
 	// Visitador de métodos
-	// Este visitador añade el nodo final al CFG
+	// Este visitador añade el nodo final al ProgramDependencyGraph
 	@Override
 	public void visit(MethodDeclaration methodDeclaration, ProgramDependencyGraph programDependencyGraph)
 	{
@@ -53,17 +67,89 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	// Visitador de expresiones
-	// Cada expresión encontrada genera un nodo en el CFG
+	// Cada expresión encontrada genera un nodo en el ProgramDependencyGraph
 	@Override
 	public void visit(ExpressionStmt expressionStmt, ProgramDependencyGraph programDependencyGraph)
 	{
 		// Creamos el nodo actual
-		String nodoActual = crearNodo(expressionStmt);
+		this.currentNode = crearNodo(expressionStmt);
 
-		createEdges(nodoActual, programDependencyGraph);
+		createEdges(this.currentNode, programDependencyGraph);
 
 		// Seguimos visitando...
 		super.visit(expressionStmt, programDependencyGraph);
+	}
+
+	@Override
+	public void visit(VariableDeclarator variableDeclarator, ProgramDependencyGraph programDependencyGraph) {
+		// Add the variable to the data dependency dictionary.
+		String variableName = variableDeclarator.getNameAsString();
+
+		if (dataDependencies.containsKey(variableName))
+		{
+			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+		}
+
+		dataDependencies.put(variableName, this.currentNode);
+
+		super.visit(variableDeclarator, programDependencyGraph);
+	}
+
+	@Override
+	public void visit(NameExpr nameExpr, ProgramDependencyGraph programDependencyGraph) {
+		String variableName = nameExpr.getNameAsString();
+
+		// Only add the variable when visiting from another another node from a special type.
+		if (dataDependencies.containsKey(variableName)
+			&& (this.isInsideAssign || this.isParameterOfMethodCall))
+		{
+			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+		}
+
+		super.visit(nameExpr, programDependencyGraph);
+	}
+
+	public void visit(UnaryExpr unaryExpr, ProgramDependencyGraph programDependencyGraph)
+	{
+		if (unaryExpr.getExpression() instanceof NameExpr)
+		{
+			NameExpr nameExpr = (NameExpr) unaryExpr.getExpression();
+
+			String variableName = nameExpr.getNameAsString();
+
+			if (this.dataDependencies.containsKey(variableName))
+			{
+				// Add a data dependency to previous variable definition.
+				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+			}
+
+			this.dataDependencies.put(variableName, this.currentNode);
+		}
+	}
+
+	@Override
+	public void visit(AssignExpr n, ProgramDependencyGraph arg) {
+		isInsideAssign = true;
+
+		super.visit(new ExpressionStmt(n.getValue()), arg);
+
+		isInsideAssign = false;
+
+		NameExpr nameExpr = (NameExpr) n.getTarget();
+
+		String variableName = nameExpr.getNameAsString();
+
+		// If an assign operation does more than just assigning values, it would read the value from the previous variable.
+		if (n.getOperator() != Operator.ASSIGN)
+		{
+			if (this.dataDependencies.containsKey(variableName))
+			{
+				// Add a data dependency to previous variable definition.
+				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, arg);
+			}
+		}
+
+		this.dataDependencies.put(variableName, this.currentNode);
 	}
 
 	/**
@@ -162,7 +248,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	/**
-	 * Visits a {@link 	ForeachStmt} and registers all the nodes into the {@link CFG}.
+	 * Visits a {@link 	ForeachStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
 	 * @param forEachStmt The foreach statement to visit.
 	 * @param programDependencyGraph The program dependency graph.
 	 */
@@ -226,7 +312,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	/**
-	 * Visits a {@link SwitchEntryStmt} and registers all the nodes into the {@link CFG}.
+	 * Visits a {@link SwitchEntryStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
 	 * @param switchEntryStatement The switch entry statement.
 	 * @param programDependencyGraph The program dependency graph.
 	 */
@@ -250,6 +336,19 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		this.controlNodes.pop();
 	}
 
+	/**
+	 * Visits a {@link MethodCallExpr} and registers all the nodes into the {@link ProgramDependencyGraph}.
+	 */
+	@Override
+	public void visit(MethodCallExpr methodCallExpr, ProgramDependencyGraph programDependencyGraph) {
+		// Visiting the method arguments with this flag enabled will add the corresponding data dependency edges to any visited variable reference.
+		this.isParameterOfMethodCall = true;
+
+		super.visit(methodCallExpr, programDependencyGraph);
+
+		this.isParameterOfMethodCall = false;
+	}
+
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
@@ -257,15 +356,30 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		addControlEdge(currentNode, programDependencyGraph);
 	}
 
+
 	// Añade un arco desde el último nodo hasta el nodo actual (se le pasa como parametro)
 	private void addControlEdge(String currentNode, ProgramDependencyGraph programDependencyGraph)
 	{
 		System.out.println("NODO: " + currentNode);
 
 		String edge = this.controlNodes.peek().getNode() + "->" + currentNode + ";";
+
 		programDependencyGraph.controlEdges.add(edge);
 	}
 
+	/**
+	 * Adds a data dependency edge from the previous node to the current node.
+	 * @param sourceNode The source node for the data dependency edge.
+	 * @param targetNode The target of the data dependency edge.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void addDataDependencyEdges(String sourceNode, String targetNode, ProgramDependencyGraph programDependencyGraph) {
+		System.out.println("DATOS NODO: " + targetNode);
+
+		String edge = sourceNode + "->" + targetNode + "[style=dashed];";
+
+		programDependencyGraph.dataEdges.add(edge);
+	}
 
 	// Crear nodo
 	// Añade un arco desde el nodo actual hasta el último control
