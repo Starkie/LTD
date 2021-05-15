@@ -1,5 +1,7 @@
 package grafos;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -44,7 +46,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	// Each control node in the stack represents a nesting level.
 	Stack<ControlNodePDG> controlNodes = new Stack<ControlNodePDG>();
 
-	HashMap<String, String> dataDependencies = new HashMap<String, String>();
+	HashMap<String, List<String>> dataDependencies = new HashMap<String, List<String>>();
 
 	String currentNode = "Entry";
 
@@ -91,9 +93,35 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
 		}
 
-		dataDependencies.put(variableName, this.currentNode);
+		registerVariableAssignation(variableName, programDependencyGraph);
 
 		super.visit(variableDeclarator, programDependencyGraph);
+	}
+
+	private void registerVariableAssignation(String variableName, ProgramDependencyGraph programDependencyGraph) {
+		// TODO: Convertir a lista.
+		// 1: Si está en nivel de entry: vaciar la lista y añadir la nueva entrada
+		// 2: Si está dentro de una condición de control, comprobar si las asignaciones tienen el mismo nodo de control.
+		//	- Reemplazar todas las asignaciones en la misma condición de control. SI NO ESTÁN EN EL MISMO, SE APENDE AL FINAL.
+		//	- SOLO LAS QUE ESTÁN A NIVEL DE ENTRY BORRAN TODO.
+
+		// If the key is not present or there is currently no nesting of a control node.
+		if (!this.dataDependencies.containsKey(variableName)
+			|| this.controlNodes.peek().getType() == ControlNodeType.METHOD)
+		{
+			List<String> nodes = new ArrayList<String>();
+
+			nodes.add(this.currentNode);
+
+			this.dataDependencies.put(variableName, nodes);
+		}
+		else
+		{
+			List<String> asdf = this.dataDependencies.get(variableName);
+
+			asdf.add(this.currentNode);
+		}
+
 	}
 
 	@Override
@@ -124,33 +152,33 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
 			}
 
-			this.dataDependencies.put(variableName, this.currentNode);
+			this.registerVariableAssignation(variableName, programDependencyGraph);
 		}
 	}
 
 	@Override
-	public void visit(AssignExpr n, ProgramDependencyGraph arg) {
+	public void visit(AssignExpr assignExpr, ProgramDependencyGraph programDependencyGrah) {
 		isInsideAssign = true;
 
-		super.visit(new ExpressionStmt(n.getValue()), arg);
+		super.visit(new ExpressionStmt(assignExpr.getValue()), programDependencyGrah);
 
 		isInsideAssign = false;
 
-		NameExpr nameExpr = (NameExpr) n.getTarget();
+		NameExpr nameExpr = (NameExpr) assignExpr.getTarget();
 
 		String variableName = nameExpr.getNameAsString();
 
 		// If an assign operation does more than just assigning values, it would read the value from the previous variable.
-		if (n.getOperator() != Operator.ASSIGN)
+		if (assignExpr.getOperator() != Operator.ASSIGN)
 		{
 			if (this.dataDependencies.containsKey(variableName))
 			{
 				// Add a data dependency to previous variable definition.
-				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, arg);
+				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, programDependencyGrah);
 			}
 		}
 
-		this.dataDependencies.put(variableName, this.currentNode);
+		this.registerVariableAssignation(variableName, programDependencyGrah);
 	}
 
 	/**
@@ -374,6 +402,18 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		String edge = this.controlNodes.peek().getNode() + "->" + currentNode + ";";
 
 		programDependencyGraph.controlEdges.add(edge);
+	}
+
+	/**
+	 * Adds a data dependency edge from the previous node to the current node.
+	 * @param sourceNode The source node for the data dependency edge.
+	 * @param targetNode The target of the data dependency edge.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void addDataDependencyEdges(List<String> sourceNodes, String targetNode, ProgramDependencyGraph programDependencyGraph) {
+		for (String node : sourceNodes) {
+			addDataDependencyEdges(node, this.currentNode, programDependencyGraph);
+		}
 	}
 
 	/**
