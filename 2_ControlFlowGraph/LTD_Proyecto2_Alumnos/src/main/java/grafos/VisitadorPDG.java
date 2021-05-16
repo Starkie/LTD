@@ -46,7 +46,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	// Each control node in the stack represents a nesting level.
 	Stack<ControlNodePDG> controlNodes = new Stack<ControlNodePDG>();
 
-	HashMap<String, List<String>> dataDependencies = new HashMap<String, List<String>>();
+	HashMap<String, List<String>> variableAssignations = new HashMap<String, List<String>>();
+	HashMap<String, List<String>> variableReferences = new HashMap<String, List<String>>();
 
 	String currentNode = "Entry";
 
@@ -88,9 +89,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Add the variable to the data dependency dictionary.
 		String variableName = variableDeclarator.getNameAsString();
 
-		if (dataDependencies.containsKey(variableName))
+		if (variableAssignations.containsKey(variableName))
 		{
-			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+			registerVariableReference(variableAssignations.get(variableName), this.currentNode, programDependencyGraph);
 		}
 
 		registerVariableAssignation(variableName, programDependencyGraph);
@@ -106,20 +107,20 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		//	- SOLO LAS QUE ESTÁN A NIVEL DE ENTRY BORRAN TODO.
 
 		// If the key is not present or there is currently no nesting of a control node.
-		if (!this.dataDependencies.containsKey(variableName)
-			|| this.controlNodes.peek().getType() == ControlNodeType.METHOD)
+		if (!this.variableAssignations.containsKey(variableName)
+			|| this.controlNodes.size() == 1)
 		{
 			List<String> nodes = new ArrayList<String>();
 
 			nodes.add(this.currentNode);
 
-			this.dataDependencies.put(variableName, nodes);
+			this.variableAssignations.put(variableName, nodes);
 		}
 		else
 		{
-			List<String> asdf = this.dataDependencies.get(variableName);
+			List<String> assignationNodes = this.variableAssignations.get(variableName);
 
-			asdf.add(this.currentNode);
+			assignationNodes.add(this.currentNode);
 		}
 
 	}
@@ -129,10 +130,10 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		String variableName = nameExpr.getNameAsString();
 
 		// Only add the variable when visiting from another another node from a special type.
-		if (dataDependencies.containsKey(variableName)
+		if (variableAssignations.containsKey(variableName)
 			&& (this.isInsideAssign || this.isPartOfCondition || this.isParameterOfMethodCall))
 		{
-			addDataDependencyEdges(dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+			registerVariableReference(variableAssignations.get(variableName), this.currentNode, programDependencyGraph);
 		}
 
 		super.visit(nameExpr, programDependencyGraph);
@@ -146,10 +147,10 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 			String variableName = nameExpr.getNameAsString();
 
-			if (this.dataDependencies.containsKey(variableName))
+			if (this.variableAssignations.containsKey(variableName))
 			{
 				// Add a data dependency to previous variable definition.
-				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, programDependencyGraph);
+				registerVariableReference(this.variableAssignations.get(variableName), this.currentNode, programDependencyGraph);
 			}
 
 			this.registerVariableAssignation(variableName, programDependencyGraph);
@@ -171,10 +172,10 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// If an assign operation does more than just assigning values, it would read the value from the previous variable.
 		if (assignExpr.getOperator() != Operator.ASSIGN)
 		{
-			if (this.dataDependencies.containsKey(variableName))
+			if (this.variableAssignations.containsKey(variableName))
 			{
 				// Add a data dependency to previous variable definition.
-				addDataDependencyEdges(this.dataDependencies.get(variableName), this.currentNode, programDependencyGrah);
+				registerVariableReference(this.variableAssignations.get(variableName), this.currentNode, programDependencyGrah);
 			}
 		}
 
@@ -193,13 +194,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		createEdges(ifNode, programDependencyGraph);
 
-        // Check the data dependencies inside the condition.
-		this.isPartOfCondition = true;
-
-		this.currentNode = ifNode;
-		super.visit(new ExpressionStmt(ifStmt.getCondition()), programDependencyGraph);
-
-		this.isPartOfCondition = false;
+        registerConditionVariableReferences(ifNode, ifStmt.getCondition(), programDependencyGraph);
 
 		// Push the if control node to the stack.
 		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
@@ -229,6 +224,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
 		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
+		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
+
 		// TODO: Can the loops be refactored to a single method?
 
 		// Create the edges from the previous node to the loop.
@@ -239,6 +236,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Create the edges to the loop's child nodes.
 		super.visit(convertirEnBloque(whileStmt.getBody()), programDependencyGraph);
+
+		// Register the data dependencies from the condition again, so the increment variables are registered.
+		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
 
 		// Remove the while control node since it is not needed anymore.
 		this.controlNodes.pop();
@@ -255,6 +255,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Create the edges from the previous node to the loop.
 		createEdges(forNode, programDependencyGraph);
+
+		registerConditionVariableReferences(forNode, forStmt.getCompare().get(), programDependencyGraph);
 
 		ControlNodePDG forControlNode = new ControlNodePDG(ControlNodeType.FOR,  forNode);
 		this.controlNodes.push(forControlNode);
@@ -280,6 +282,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Create the edges to the loop's child nodes.
 		super.visit(convertirEnBloque(forBody), programDependencyGraph);
 
+		// Register the data dependencies from the condition again, so the increment variables are registered.
+		registerConditionVariableReferences(forNode, forStmt.getCompare().get(), programDependencyGraph);
+
 		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
 	}
@@ -292,6 +297,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	@Override
 	public void visit(ForeachStmt forEachStmt, ProgramDependencyGraph programDependencyGraph) {
 		String foreachNode = crearNodo("foreach (" + forEachStmt.getVariable() + " : " + forEachStmt.getIterable() + ")");
+
+		// Register the variable references from the iterable, if any exists.
+		registerConditionVariableReferences(foreachNode, forEachStmt.getIterable(), programDependencyGraph);
 
 		// Create the edges from the previous node to the loop.
 		createEdges(foreachNode, programDependencyGraph);
@@ -322,6 +330,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		super.visit(convertirEnBloque(doStmt.getBody()), programDependencyGraph);
 
+		registerConditionVariableReferences(doWhileNode, doStmt.getCondition(), programDependencyGraph);
+
 		// Remove the do-while statement from the control nodes, since it is not needed anymore.
 		this.controlNodes.pop();
 	}
@@ -335,6 +345,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(SwitchStmt switchStmt, ProgramDependencyGraph programDependencyGraph) {
 		// Create the edges from the previous node to the switch.
 		String switchNode = crearNodo("switch (" + switchStmt.getSelector() + ")");
+
+		registerConditionVariableReferences(switchNode, switchStmt.getSelector(), programDependencyGraph);
 
 		createEdges(switchNode, programDependencyGraph);
 
@@ -386,6 +398,16 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		this.isParameterOfMethodCall = false;
 	}
 
+	private void registerConditionVariableReferences(String conditionNode, Expression conditionExpression, ProgramDependencyGraph programDependencyGraph) {
+		// Check the data dependencies inside the condition.
+		this.isPartOfCondition = true;
+
+		this.currentNode = conditionNode;
+		super.visit(new ExpressionStmt(conditionExpression), programDependencyGraph);
+
+		this.isPartOfCondition = false;
+	}
+
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
@@ -405,13 +427,31 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	/**
-	 * Adds a data dependency edge from the previous node to the current node.
-	 * @param sourceNode The source node for the data dependency edge.
-	 * @param targetNode The target of the data dependency edge.
+	 * Registers a data dependency from the target node to the source nodes.
+	 * @param sourceNode The nodes where the variable was assigned.
+	 * @param targetNode The node which references the variable.
 	 * @param programDependencyGraph The program dependency graph.
 	 */
-	private void addDataDependencyEdges(List<String> sourceNodes, String targetNode, ProgramDependencyGraph programDependencyGraph) {
+	private void registerVariableReference(List<String> sourceNodes, String targetNode, ProgramDependencyGraph programDependencyGraph) {
 		for (String node : sourceNodes) {
+			if (this.variableReferences.containsKey(node))
+			{
+				List<String> nodeReferences = this.variableReferences.get(node);
+
+				if (!nodeReferences.contains(targetNode))
+				{
+					nodeReferences.add(targetNode);
+				}
+			}
+			else
+			{
+				List<String> nodeReferences = new ArrayList<String>();
+
+				nodeReferences.add(targetNode);
+
+				this.variableReferences.put(node, nodeReferences);
+			}
+
 			addDataDependencyEdges(node, this.currentNode, programDependencyGraph);
 		}
 	}
@@ -427,7 +467,10 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		String edge = sourceNode + "->" + targetNode + "[style=dashed];";
 
-		programDependencyGraph.dataEdges.add(edge);
+		if (!programDependencyGraph.dataEdges.contains(edge))
+		{
+			programDependencyGraph.dataEdges.add(edge);
+		}
 	}
 
 	// Crear nodo
