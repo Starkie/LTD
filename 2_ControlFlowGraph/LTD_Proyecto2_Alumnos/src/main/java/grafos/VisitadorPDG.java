@@ -1,26 +1,21 @@
 package grafos;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.AssignExpr.Operator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
-import com.github.javaparser.ast.expr.AssignExpr.Operator;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
@@ -171,13 +166,14 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Create the edges to the if node.
 		String ifNode = crearNodo("if (" + ifStmt.getCondition() + ")");
 
+		// TODO: Separate IF and ELSE branches.
+
 		createEdges(ifNode, programDependencyGraph);
-
-        registerConditionVariableReferences(ifNode, ifStmt.getCondition(), programDependencyGraph);
-
 		// Push the if control node to the stack.
 		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
 		this.controlNodes.push(ifControlNode);
+
+        registerConditionVariableReferences(ifNode, ifStmt.getCondition(), programDependencyGraph);
 
 		// First visit the 'then' statement, that will always be present.
 		super.visit(convertirEnBloque(ifStmt.getThenStmt()), programDependencyGraph);
@@ -203,7 +199,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
 		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
-
 		// TODO: Can the loops be refactored to a single method?
 
 		// Create the edges from the previous node to the loop.
@@ -219,11 +214,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// The variables modified inside the loop are referenced as dependencies for the next iterations.
 
-		// TODO: Corregir el scope de las variables. Si una variable se redefine dentro del bucle, el scope debe ser local al bucle. No llega la definición de afuera
-		// (A menos que la local está en un condicional.)
-
-		// ¿Registrar solo las que vienen del parent, si las hubiera?
-
 		// Register the data dependencies from the condition again,
 		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
 
@@ -231,7 +221,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
 			.stream()
 			.flatMap(List::stream)
-			.filter(va -> va.getParent() == whileControlNode)
+			.filter(va -> this.controlNodes.indexOf(va.getParent()) > this.controlNodes.indexOf(whileControlNode)
+					|| this.controlNodes.indexOf(va.getParent()) == -1)
 			.collect(Collectors.toList());
 
 		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
@@ -475,8 +466,11 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		for (VariableAssignment assignment : sourceVariableAssignments) {
 
-			// If the variable assignment is outside the current scope.
-			if (this.controlNodes.indexOf(assignment.getParent()) < currentIndex)
+			// TODO: Eval 1: 6 x++. El if está desapilado y devuelve -1. ¿Qué hacer?
+			// ¿Me guardo el nesting level en el assignment?
+			// If the variable assignment is outside the current scope
+			if (this.controlNodes.indexOf(assignment.getParent()) < currentIndex
+				&& this.controlNodes.indexOf(assignment.getParent()) != -1)
 			{
 				continue;
 			}
