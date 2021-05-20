@@ -99,35 +99,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			registerVariableReference(variableAssignments.get(variableName), this.currentNode, programDependencyGraph);
 		}
 
-		registerVariableAssignation(variableName, programDependencyGraph);
+		registerVariableAssignment(variableName, programDependencyGraph);
 
 		super.visit(variableDeclarator, programDependencyGraph);
-	}
-
-	private void registerVariableAssignation(String variableName, ProgramDependencyGraph programDependencyGraph) {
-		// TODO: Convertir a lista.
-		// 1: Si está en nivel de entry: vaciar la lista y añadir la nueva entrada
-		// 2: Si está dentro de una condición de control, comprobar si las asignaciones tienen el mismo nodo de control.
-		//	- Reemplazar todas las asignaciones en la misma condición de control. SI NO ESTÁN EN EL MISMO, SE APENDE AL FINAL.
-		//	- SOLO LAS QUE ESTÁN A NIVEL DE ENTRY BORRAN TODO.
-
-		// If the key is not present or there is currently no nesting of a control node.
-		if (!this.variableAssignments.containsKey(variableName)
-			|| this.controlNodes.size() == 1)
-		{
-			List<VariableAssignment> nodes = new ArrayList<VariableAssignment>();
-
-			nodes.add(new VariableAssignment(variableName, this.currentNode, this.controlNodes.peek()));
-
-			this.variableAssignments.put(variableName, nodes);
-		}
-		else
-		{
-			List<VariableAssignment> assignationNodes = this.variableAssignments.get(variableName);
-
-			assignationNodes.add(new VariableAssignment(variableName, this.currentNode, this.controlNodes.peek()));
-		}
-
 	}
 
 	@Override
@@ -158,7 +132,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 				registerVariableReference(this.variableAssignments.get(variableName), this.currentNode, programDependencyGraph);
 			}
 
-			this.registerVariableAssignation(variableName, programDependencyGraph);
+			this.registerVariableAssignment(variableName, programDependencyGraph);
 		}
 	}
 
@@ -184,7 +158,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			}
 		}
 
-		this.registerVariableAssignation(variableName, programDependencyGrah);
+		this.registerVariableAssignment(variableName, programDependencyGrah);
 	}
 
 	/**
@@ -229,7 +203,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
 		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
-		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
 
 		// TODO: Can the loops be refactored to a single method?
 
@@ -238,36 +211,40 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		ControlNodePDG whileControlNode = new ControlNodePDG(ControlNodeType.WHILE,  whileNode);
 		this.controlNodes.push(whileControlNode);
-		
-		// Clear the variable references before visiting the while loop.
-		this.variableReferences.clear();
+
+		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
 
 		// Create the edges to the loop's child nodes.
 		super.visit(convertirEnBloque(whileStmt.getBody()), programDependencyGraph);
 
 		// The variables modified inside the loop are referenced as dependencies for the next iterations.
-		
-		// Register the data dependencies from the condition again, 
+
+		// TODO: Corregir el scope de las variables. Si una variable se redefine dentro del bucle, el scope debe ser local al bucle. No llega la definición de afuera
+		// (A menos que la local está en un condicional.)
+
+		// ¿Registrar solo las que vienen del parent, si las hubiera?
+
+		// Register the data dependencies from the condition again,
 		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
-		
+
 		// Get the variable assignments declared in the while node.
 		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
 			.stream()
 			.flatMap(List::stream)
 			.filter(va -> va.getParent() == whileControlNode)
 			.collect(Collectors.toList());
-		
+
 		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
 		{
 			Optional<VariableAssignment> sameVariableAssignment =  lastLoopAssignments.stream()
 				.filter(la -> !la.equals(referencedVariableAssignment) && la.getVariableName().equals(referencedVariableAssignment.getVariableName()))
 				.findFirst();
-			
+
 			if (sameVariableAssignment.isPresent())
 			{
 				for (String referencingNode : this.variableReferences.get(referencedVariableAssignment))
 				{
-					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);					
+					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);
 				}
 			}
 		}
@@ -459,13 +436,51 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	/**
-	 * Registers a data dependency from the target node to the source nodes.
-	 * @param sourceNode The nodes where the variable was assigned.
+	 * Registers the assignment of a given variable. Depending on the nesting level, it might override other
+	 * assignments.
+	 * @param variableName The name of the variable.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void registerVariableAssignment(String variableName, ProgramDependencyGraph programDependencyGraph) {
+		// If the variable has not been registered or the current control node is ENTRY.
+		if (!this.variableAssignments.containsKey(variableName)
+			|| this.controlNodes.size() == 1)
+		{
+			// This will override all the existing assignments of the current variable, if there was any.
+			List<VariableAssignment> nodes = new ArrayList<VariableAssignment>();
+
+			nodes.add(new VariableAssignment(variableName, this.currentNode, this.controlNodes.peek()));
+
+			this.variableAssignments.put(variableName, nodes);
+		}
+		else
+		{
+			// Simply append the new assignment to the existing ones.
+			// This case appears when there are different branches or scopes at play.
+			List<VariableAssignment> assignationNodes = this.variableAssignments.get(variableName);
+
+			assignationNodes.add(new VariableAssignment(variableName, this.currentNode, this.controlNodes.peek()));
+		}
+
+	}
+
+	/**
+	 * Registers a data dependency from the target node to the given variable assignments.
+	 * @param sourceVariableAssignments The nodes where the current variable was assigned.
 	 * @param targetNode The node which references the variable.
 	 * @param programDependencyGraph The program dependency graph.
 	 */
-	private void registerVariableReference(List<VariableAssignment> sourceNodes, String targetNode, ProgramDependencyGraph programDependencyGraph) {		
-		for (VariableAssignment assignment : sourceNodes) {
+	private void registerVariableReference(List<VariableAssignment> sourceVariableAssignments, String targetNode, ProgramDependencyGraph programDependencyGraph) {
+		int currentIndex = GetVariableScopeLevel(sourceVariableAssignments);
+
+		for (VariableAssignment assignment : sourceVariableAssignments) {
+
+			// If the variable assignment is outside the current scope.
+			if (this.controlNodes.indexOf(assignment.getParent()) < currentIndex)
+			{
+				continue;
+			}
+
 			if (this.variableReferences.containsKey(assignment))
 			{
 				List<String> nodeReferences = this.variableReferences.get(assignment);
@@ -486,6 +501,30 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 			addDataDependencyEdges(assignment.getNode(), this.currentNode, programDependencyGraph);
 		}
+	}
+
+	/**
+	 * Gets the minimum nesting level allowed for the assignment.
+	 * @param sourceVariableAssignments The nodes where the current variable was assigned.
+	 * @return The minimum allowed nesting level.
+	 */
+	private int GetVariableScopeLevel(List<VariableAssignment> sourceVariableAssignments) {
+		int currentIndex = 0;
+
+		for (VariableAssignment assignment : sourceVariableAssignments)
+		{
+			ControlNodePDG parentControlNode = assignment.getParent();
+
+			int index = this.controlNodes.indexOf(parentControlNode);
+
+			// If the current node is deeper.
+			if (index > currentIndex)
+			{
+				currentIndex = index;
+			}
+		}
+
+		return currentIndex;
 	}
 
 	/**
