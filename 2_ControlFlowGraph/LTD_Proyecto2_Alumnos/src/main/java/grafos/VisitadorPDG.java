@@ -173,7 +173,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
 		this.controlNodes.push(ifControlNode);
 
-        registerConditionVariableReferences(ifNode, ifStmt.getCondition(), programDependencyGraph);
+        registerConditionDataDependencies(ifNode, ifStmt.getCondition(), programDependencyGraph);
 
 		// First visit the 'then' statement, that will always be present.
 		super.visit(convertirEnBloque(ifStmt.getThenStmt()), programDependencyGraph);
@@ -199,49 +199,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(WhileStmt whileStmt, ProgramDependencyGraph programDependencyGraph) {
 		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
-		// TODO: Can the loops be refactored to a single method?
-
-		// Create the edges from the previous node to the loop.
-		createEdges(whileNode, programDependencyGraph);
-
 		ControlNodePDG whileControlNode = new ControlNodePDG(ControlNodeType.WHILE,  whileNode);
-		this.controlNodes.push(whileControlNode);
-
-		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
-
-		// Create the edges to the loop's child nodes.
-		super.visit(convertirEnBloque(whileStmt.getBody()), programDependencyGraph);
-
-		// The variables modified inside the loop are referenced as dependencies for the next iterations.
-
-		// Register the data dependencies from the condition again,
-		registerConditionVariableReferences(whileNode, whileStmt.getCondition(), programDependencyGraph);
-
-		// Get the variable assignments declared in the while node.
-		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
-			.stream()
-			.flatMap(List::stream)
-			.filter(va -> this.controlNodes.indexOf(va.getParent()) > this.controlNodes.indexOf(whileControlNode)
-					|| this.controlNodes.indexOf(va.getParent()) == -1)
-			.collect(Collectors.toList());
-
-		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
-		{
-			Optional<VariableAssignment> sameVariableAssignment =  lastLoopAssignments.stream()
-				.filter(la -> !la.equals(referencedVariableAssignment) && la.getVariableName().equals(referencedVariableAssignment.getVariableName()))
-				.findFirst();
-
-			if (sameVariableAssignment.isPresent())
-			{
-				for (String referencingNode : this.variableReferences.get(referencedVariableAssignment))
-				{
-					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);
-				}
-			}
-		}
-
-		// Remove the while control node since it is not needed anymore.
-		this.controlNodes.pop();
+		
+		visitLoop(whileControlNode, whileStmt.getCondition(), whileStmt.getBody(), programDependencyGraph, null);
 	}
 
 	/**
@@ -253,40 +213,20 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	public void visit(ForStmt forStmt, ProgramDependencyGraph programDependencyGraph) {
 		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
-		// Create the edges from the previous node to the loop.
-		createEdges(forNode, programDependencyGraph);
-
-		registerConditionVariableReferences(forNode, forStmt.getCompare().get(), programDependencyGraph);
-
-		ControlNodePDG forControlNode = new ControlNodePDG(ControlNodeType.FOR,  forNode);
-		this.controlNodes.push(forControlNode);
+		ControlNodePDG forControlNode = new ControlNodePDG(ControlNodeType.FOR, forNode);
 
 		// Add the update statements to the end of the body.
 		BlockStmt forBody = convertirEnBloque(forStmt.getBody());
-
-		// Add the edges for the initialization nodes.
-		for (Expression node : forStmt.getInitialization().toArray(new Expression[0]))
-		{
-			String currentNode = crearNodo(node);
-
-			createEdges(currentNode, programDependencyGraph);
-		}
-
+		
 		List<Statement> updateStatements = forStmt.getUpdate()
 				.stream()
 				.map(u -> new ExpressionStmt(u))
 				.collect(Collectors.toList());
 
 		forBody.getStatements().addAll(updateStatements);
-
-		// Create the edges to the loop's child nodes.
-		super.visit(convertirEnBloque(forBody), programDependencyGraph);
-
-		// Register the data dependencies from the condition again, so the increment variables are registered.
-		registerConditionVariableReferences(forNode, forStmt.getCompare().get(), programDependencyGraph);
-
-		// Remove the for control node since it is not needed anymore.
-		this.controlNodes.pop();
+		
+		// TODO: Can the Compare be null?
+		visitLoop(forControlNode, forStmt.getCompare().get(), forBody, programDependencyGraph, forStmt.getInitialization());
 	}
 
 	/**
@@ -297,20 +237,104 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	@Override
 	public void visit(ForeachStmt forEachStmt, ProgramDependencyGraph programDependencyGraph) {
 		String foreachNode = crearNodo("foreach (" + forEachStmt.getVariable() + " : " + forEachStmt.getIterable() + ")");
-
-		// Register the variable references from the iterable, if any exists.
-		registerConditionVariableReferences(foreachNode, forEachStmt.getIterable(), programDependencyGraph);
-
-		// Create the edges from the previous node to the loop.
-		createEdges(foreachNode, programDependencyGraph);
-
+		
 		ControlNodePDG foreachControlNode = new ControlNodePDG(ControlNodeType.FOREACH,  foreachNode);
-		this.controlNodes.push(foreachControlNode);
+		
+		visitLoop(foreachControlNode, forEachStmt.getIterable(), forEachStmt.getBody(), programDependencyGraph, null);
+	}
 
-		super.visit(convertirEnBloque(forEachStmt.getBody()), programDependencyGraph);
+	/**
+	 * Visits a generic loop given all the required parameters.
+	 * @param controlNode The control node that represents the loop.
+	 * @param loopCondition The loop's condition expression.
+	 * @param loopBody The loop's body statement.
+	 * @param programDependencyGraph The program dependency graph.
+	 * @param initializationExpressions (Optional) The initialization expressions, if any, for the loop counter variables.
+	 */
+	private void visitLoop(ControlNodePDG controlNode, Expression loopCondition, Statement loopBody, ProgramDependencyGraph programDependencyGraph, List<Expression> initializationExpressions) 
+	{
+		// Create the edges from the previous node to the loop.
+		createEdges(controlNode.getNode(), programDependencyGraph);
+
+		this.controlNodes.push(controlNode);
+		
+		// Register the variable references from the condition, if any exists.
+		registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
+		
+		// Add the edges for the initialization nodes.
+		if (initializationExpressions != null)		
+		{
+			for (Expression node : initializationExpressions)
+			{
+				String currentNode = crearNodo(node);
+				
+				createEdges(currentNode, programDependencyGraph);
+			}	
+		}
+
+		// Create the edges to the loop's child nodes.
+		super.visit(convertirEnBloque(loopBody), programDependencyGraph);
+		
+		// The variables modified inside the loop are referenced as dependencies for the next iterations.		
+		registerLoopNextIterationDataDependencies(controlNode, loopCondition, programDependencyGraph);
 
 		// Remove the for control node since it is not needed anymore.
 		this.controlNodes.pop();
+	}
+	
+	/**
+	 * Registers the data dependencies found in the given condition expression.
+	 * @param conditionNode The node where the condition is located.
+	 * @param conditionExpression The condition expression.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void registerConditionDataDependencies(String conditionNode, Expression conditionExpression, ProgramDependencyGraph programDependencyGraph) {
+		// A flag to indicate to the visitor methods that we are currently visiting a condition expression.
+		this.isPartOfCondition = true;
+
+		this.currentNode = conditionNode;
+		super.visit(new ExpressionStmt(conditionExpression), programDependencyGraph);
+
+		this.isPartOfCondition = false;
+	}
+
+	/**
+	 * Registers the data dependencies of the next iterations of a loop. After visiting a loop, if a variable
+	 * is modified inside its body, the dependencies should retroactively added to all the variable references in it.
+	 * @param controlNode The loop's control node.
+	 * @param loopCondition The loop's condition expression.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
+		// The variables modified inside the loop are referenced as dependencies for the next iterations.
+		
+		// Register the data dependencies from the condition again,
+		registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
+		
+		// Get the variable assignments declared in the loop node.
+		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
+			.stream()
+			.flatMap(List::stream)
+			.filter(va -> this.controlNodes.indexOf(va.getParent()) >= this.controlNodes.indexOf(controlNode)
+					|| this.controlNodes.indexOf(va.getParent()) == -1)
+			.collect(Collectors.toList());
+
+		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
+		{
+			// Check if any variable was re-defined in the loop's body.
+			Optional<VariableAssignment> sameVariableAssignment =  lastLoopAssignments.stream()
+				.filter(la -> !la.equals(referencedVariableAssignment) && la.getVariableName().equals(referencedVariableAssignment.getVariableName()))
+				.findFirst();
+
+			if (sameVariableAssignment.isPresent())
+			{
+				// Add the corresponding references to the redefined variables.
+				for (String referencingNode : this.variableReferences.get(referencedVariableAssignment))
+				{
+					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);
+				}
+			}
+		}
 	}
 
 	/**
@@ -330,7 +354,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		super.visit(convertirEnBloque(doStmt.getBody()), programDependencyGraph);
 
-		registerConditionVariableReferences(doWhileNode, doStmt.getCondition(), programDependencyGraph);
+		registerConditionDataDependencies(doWhileNode, doStmt.getCondition(), programDependencyGraph);
 
 		// Remove the do-while statement from the control nodes, since it is not needed anymore.
 		this.controlNodes.pop();
@@ -346,7 +370,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Create the edges from the previous node to the switch.
 		String switchNode = crearNodo("switch (" + switchStmt.getSelector() + ")");
 
-		registerConditionVariableReferences(switchNode, switchStmt.getSelector(), programDependencyGraph);
+		registerConditionDataDependencies(switchNode, switchStmt.getSelector(), programDependencyGraph);
 
 		createEdges(switchNode, programDependencyGraph);
 
@@ -397,17 +421,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		this.isParameterOfMethodCall = false;
 	}
-
-	private void registerConditionVariableReferences(String conditionNode, Expression conditionExpression, ProgramDependencyGraph programDependencyGraph) {
-		// Check the data dependencies inside the condition.
-		this.isPartOfCondition = true;
-
-		this.currentNode = conditionNode;
-		super.visit(new ExpressionStmt(conditionExpression), programDependencyGraph);
-
-		this.isPartOfCondition = false;
-	}
-
 
 	// Crear arcos
 	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
