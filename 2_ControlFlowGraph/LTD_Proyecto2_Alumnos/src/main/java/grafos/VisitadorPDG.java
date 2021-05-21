@@ -580,7 +580,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	private void addDataDependencyEdges(String sourceNode, String targetNode, ProgramDependencyGraph programDependencyGraph) {
 		System.out.println("DATOS NODO: " + targetNode);
 
-		String edge = sourceNode + "->" + targetNode + "[color=red, style=dashed];";
+		String edge = sourceNode + "->" + targetNode + "[color=red, style=dashed, constraint = false];";
 
 		if (!programDependencyGraph.dataEdges.contains(edge))
 		{
