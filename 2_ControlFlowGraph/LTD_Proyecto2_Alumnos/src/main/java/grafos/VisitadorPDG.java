@@ -297,9 +297,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		{
 			for (Expression node : initializationExpressions)
 			{
-				String currentNode = crearNodo(node);
-
-				createEdges(currentNode, programDependencyGraph);
+				this.visit(new ExpressionStmt(node), programDependencyGraph);
 			}
 		}
 
