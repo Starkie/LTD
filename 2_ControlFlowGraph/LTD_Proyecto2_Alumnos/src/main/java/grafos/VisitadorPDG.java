@@ -205,6 +205,20 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	}
 
 	/**
+	 * Visits a {@link DoStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
+	 * @param doStmt The do statement to visit.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	@Override
+	public void visit(DoStmt doStmt, ProgramDependencyGraph programDependencyGraph) {
+		String doWhileNode = crearNodo("do-while (" + doStmt.getCondition() + ")");
+
+		ControlNodePDG doWhileControlNode = new ControlNodePDG(ControlNodeType.DO,  doWhileNode);
+
+		visitLoop(doWhileControlNode, doStmt.getCondition(), doStmt.getBody(), programDependencyGraph, null);
+	}
+
+	/**
 	 * Visits a {@link ForStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
 	 * @param forStmt The for statement to visit.
 	 * @param programDependencyGraph The program dependency graph.
@@ -271,7 +285,12 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		this.controlNodes.push(controlNode);
 
 		// Register the variable references from the condition, if any exists.
-		registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
+		if (controlNode.getType() != ControlNodeType.DO)
+		{
+			// The first reference should not be registered in DO-WHILE statements.
+			// The body is always executed one time before evaluating the condition.
+			registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
+		}
 
 		// Add the edges for the initialization nodes.
 		if (initializationExpressions != null)
@@ -291,84 +310,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		registerLoopNextIterationDataDependencies(controlNode, loopCondition, programDependencyGraph);
 
 		// Remove the for control node since it is not needed anymore.
-		this.controlNodes.pop();
-	}
-
-	/**
-	 * Registers the data dependencies found in the given condition expression.
-	 * @param conditionNode The node where the condition is located.
-	 * @param conditionExpression The condition expression.
-	 * @param programDependencyGraph The program dependency graph.
-	 */
-	private void registerConditionDataDependencies(String conditionNode, Expression conditionExpression, ProgramDependencyGraph programDependencyGraph) {
-		// A flag to indicate to the visitor methods that we are currently visiting a condition expression.
-		this.isPartOfCondition = true;
-
-		this.currentNode = conditionNode;
-		super.visit(new ExpressionStmt(conditionExpression), programDependencyGraph);
-
-		this.isPartOfCondition = false;
-	}
-
-	/**
-	 * Registers the data dependencies of the next iterations of a loop. After visiting a loop, if a variable
-	 * is modified inside its body, the dependencies should retroactively added to all the variable references in it.
-	 * @param controlNode The loop's control node.
-	 * @param loopCondition The loop's condition expression.
-	 * @param programDependencyGraph The program dependency graph.
-	 */
-	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
-		// The variables modified inside the loop are referenced as dependencies for the next iterations.
-
-		// Register the data dependencies from the condition again,
-		registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
-
-		// Get the variable assignments declared in the loop node.
-		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
-			.stream()
-			.flatMap(List::stream)
-			.filter(va -> this.controlNodes.indexOf(va.getParent()) >= this.controlNodes.indexOf(controlNode)
-					|| this.controlNodes.indexOf(va.getParent()) == -1)
-			.collect(Collectors.toList());
-
-		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
-		{
-			// Check if any variable was re-defined in the loop's body.
-			Optional<VariableAssignment> sameVariableAssignment =  lastLoopAssignments.stream()
-				.filter(la -> !la.equals(referencedVariableAssignment) && la.getVariableName().equals(referencedVariableAssignment.getVariableName()))
-				.findFirst();
-
-			if (sameVariableAssignment.isPresent())
-			{
-				// Add the corresponding references to the redefined variables.
-				for (String referencingNode : this.variableReferences.get(referencedVariableAssignment))
-				{
-					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);
-				}
-			}
-		}
-	}
-
-	/**
-	 * Visits a {@link DoStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
-	 * @param doStmt The do statement to visit.
-	 * @param programDependencyGraph The program dependency graph.
-	 */
-	@Override
-	public void visit(DoStmt doStmt, ProgramDependencyGraph programDependencyGraph) {
-		String doWhileNode = crearNodo("while (" + doStmt.getCondition() + ")");
-
-		// Create the edges from the previous node to the loop.
-		createEdges(doWhileNode, programDependencyGraph);
-
-		ControlNodePDG doWhileControlNode = new ControlNodePDG(ControlNodeType.DO,  doWhileNode);
-		this.controlNodes.push(doWhileControlNode);
-
-		super.visit(convertirEnBloque(doStmt.getBody()), programDependencyGraph);
-
-		registerConditionDataDependencies(doWhileNode, doStmt.getCondition(), programDependencyGraph);
-
-		// Remove the do-while statement from the control nodes, since it is not needed anymore.
 		this.controlNodes.pop();
 	}
 
@@ -432,6 +373,61 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		super.visit(methodCallExpr, programDependencyGraph);
 
 		this.isParameterOfMethodCall = false;
+	}
+
+	/**
+	 * Registers the data dependencies found in the given condition expression.
+	 * @param conditionNode The node where the condition is located.
+	 * @param conditionExpression The condition expression.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void registerConditionDataDependencies(String conditionNode, Expression conditionExpression, ProgramDependencyGraph programDependencyGraph) {
+		// A flag to indicate to the visitor methods that we are currently visiting a condition expression.
+		this.isPartOfCondition = true;
+
+		this.currentNode = conditionNode;
+		super.visit(new ExpressionStmt(conditionExpression), programDependencyGraph);
+
+		this.isPartOfCondition = false;
+	}
+
+	/**
+	 * Registers the data dependencies of the next iterations of a loop. After visiting a loop, if a variable
+	 * is modified inside its body, the dependencies should retroactively added to all the variable references in it.
+	 * @param controlNode The loop's control node.
+	 * @param loopCondition The loop's condition expression.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
+		// The variables modified inside the loop are referenced as dependencies for the next iterations.
+
+		// Register the data dependencies from the condition again,
+		registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
+
+		// Get the variable assignments declared in the loop node.
+		List<VariableAssignment> lastLoopAssignments = this.variableAssignments.values()
+			.stream()
+			.flatMap(List::stream)
+			.filter(va -> this.controlNodes.indexOf(va.getParent()) >= this.controlNodes.indexOf(controlNode)
+					|| this.controlNodes.indexOf(va.getParent()) == -1)
+			.collect(Collectors.toList());
+
+		for (VariableAssignment referencedVariableAssignment : this.variableReferences.keySet())
+		{
+			// Check if any variable was re-defined in the loop's body.
+			Optional<VariableAssignment> sameVariableAssignment =  lastLoopAssignments.stream()
+				.filter(la -> !la.equals(referencedVariableAssignment) && la.getVariableName().equals(referencedVariableAssignment.getVariableName()))
+				.findFirst();
+
+			if (sameVariableAssignment.isPresent())
+			{
+				// Add the corresponding references to the redefined variables.
+				for (String referencingNode : this.variableReferences.get(referencedVariableAssignment))
+				{
+					addDataDependencyEdges(sameVariableAssignment.get().getNode(), referencingNode, programDependencyGraph);
+				}
+			}
+		}
 	}
 
 	/**
