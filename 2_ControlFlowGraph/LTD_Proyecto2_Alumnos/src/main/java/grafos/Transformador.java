@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -54,7 +55,7 @@ public class Transformador {
 		VoidVisitor<CFG> visitadorCFG = new VisitadorCFG();
 		visitadorCFG.visit(cu, cfg);
 
-		printGraph(ruta, cfg.arcos, "CFG");
+		printGraph(ruta, null, cfg.arcos, "CFG");
 
 		ProgramDependencyGraph pdg = new ProgramDependencyGraph();
 		VoidVisitor<ProgramDependencyGraph> visitadorPDG = new VisitadorPDG();
@@ -64,12 +65,12 @@ public class Transformador {
 
 		pdgEdges.addAll(pdg.dataEdges);
 
-		printGraph(ruta, pdgEdges, "PDG");
+		printGraph(ruta, pdg.nodes, pdgEdges, "PDG");
 	}
 
-	private static void printGraph(String ruta, List<String> edges, String graphName) {
+	private static void printGraph(String ruta, Map<Integer, List<String>> nodes,  List<String> edges, String graphName) {
 		// Imprimimos el grafo del programa
-		String dotInfo = imprimirGrafo(graphName, edges);
+		String dotInfo = imprimirGrafo(graphName, nodes, edges);
 
 		// Generamos un PDF con el CFG del programa
 		System.out.print("\nGenerando PDF...");
@@ -89,9 +90,25 @@ public class Transformador {
 	}
 
 	// Imprime el grafo en la pantalla
-	private static String imprimirGrafo(String graphName, List<String> arcos)
+	private static String imprimirGrafo(String graphName, Map<Integer, List<String>> groupedNodes, List<String> arcos)
 	{
 		String dotInfo="";
+
+		if (groupedNodes != null)
+		{
+			// The control nodes must be ranked on their level. Otherwise, the graphs are optimized and printed weird.
+			for (Integer level : groupedNodes.keySet())
+			{
+				List<String> nodes = groupedNodes.get(level);
+
+				String joinedNodes = String.join(",", nodes);
+
+				System.out.println("Level "+ level + " nodes: " + joinedNodes);
+
+				dotInfo += "{ rank = same {" + joinedNodes + "}}";
+			}
+		}
+
 		for(String arco:arcos) {
 			dotInfo += arco;
 			System.out.println("ARCO: "+arco);

@@ -422,23 +422,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		this.isParameterOfMethodCall = false;
 	}
 
-	// Crear arcos
-	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
-	{
-		addControlEdge(currentNode, programDependencyGraph);
-	}
-
-
-	// Añade un arco desde el último nodo hasta el nodo actual (se le pasa como parametro)
-	private void addControlEdge(String currentNode, ProgramDependencyGraph programDependencyGraph)
-	{
-		System.out.println("NODO: " + currentNode);
-
-		String edge = this.controlNodes.peek().getNode() + "->" + currentNode + ";";
-
-		programDependencyGraph.controlEdges.add(edge);
-	}
-
 	/**
 	 * Registers the assignment of a given variable. Depending on the nesting level, it might override other
 	 * assignments.
@@ -510,6 +493,52 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		}
 	}
 
+	// Crear arcos
+	private void createEdges(String currentNode, ProgramDependencyGraph programDependencyGraph)
+	{
+		// Register the node and its nesting level if they haven't been registered yet.
+		addNode(currentNode, programDependencyGraph);
+
+		addControlEdge(currentNode, programDependencyGraph);
+	}
+
+	/**
+	 * Registers the given node in the {@link ProgramDependencyGraph}.
+	 * @param currentNode The node to register.
+	 * @param programDependencyGraph The program dependency graph.
+	 */
+	private void addNode(String currentNode, ProgramDependencyGraph programDependencyGraph) {
+		int nestingLevel = this.controlNodes.size();
+
+		if (programDependencyGraph.nodes.containsKey(nestingLevel))
+		{
+			List<String> nodes = programDependencyGraph.nodes.get(nestingLevel);
+
+			if (!nodes.contains(currentNode))
+			{
+				nodes.add(currentNode);
+			}
+		}
+		else {
+			List<String> nodes = new ArrayList<String>();
+
+			nodes.add(currentNode);
+
+			programDependencyGraph.nodes.put(nestingLevel, nodes);
+		}
+	}
+
+
+	// Añade un arco desde el último nodo hasta el nodo actual (se le pasa como parametro)
+	private void addControlEdge(String currentNode, ProgramDependencyGraph programDependencyGraph)
+	{
+		System.out.println("NODO: " + currentNode);
+
+		String edge = this.controlNodes.peek().getNode() + "->" + currentNode + ";";
+
+		programDependencyGraph.controlEdges.add(edge);
+	}
+
 	/**
 	 * Gets the minimum nesting level allowed for the assignment.
 	 * @param sourceVariableAssignments The nodes where the current variable was assigned.
@@ -543,7 +572,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	private void addDataDependencyEdges(String sourceNode, String targetNode, ProgramDependencyGraph programDependencyGraph) {
 		System.out.println("DATOS NODO: " + targetNode);
 
-		String edge = sourceNode + "->" + targetNode + "[style=dashed];";
+		String edge = sourceNode + "->" + targetNode + "[color=red, style=dashed];";
 
 		if (!programDependencyGraph.dataEdges.contains(edge))
 		{
