@@ -12,5 +12,13 @@ public enum ControlNodeType {
 	FOR,
 	FOREACH,
 	SWITCH,
-	SWITCH_CASE
+	SWITCH_CASE;
+
+	public boolean isLoopType()
+	{
+		return this == WHILE
+			|| this == DO
+			|| this == FOR
+			|| this == FOREACH;
+	}
 }

@@ -1,6 +1,7 @@
 package grafos;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -411,8 +412,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 * @param programDependencyGraph The program dependency graph.
 	 */
 	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
-
-		Map<String, List<VariableAssignment>> loopAssignments = controlNode.getAssignments();
+		Map<String, List<VariableAssignment>> loopAssignments = this.getChildNodesAssignments(controlNode);
 
 		for (String variableName : loopAssignments.keySet())
 		{
@@ -426,7 +426,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			{
 				node = this.controlNodes.get(i);
 
-				if (node.equals(controlNode)
+				if (!node.getType().isLoopType()
 					|| !node.getAssignments().containsKey(variableName))
 				{
 					continue;
@@ -434,14 +434,42 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 				List<VariableAssignment> assignments = node.getAssignments().get(variableName);
 
-				VariableAssignment la = assignments.get(assignments.size() - 1);
+				VariableAssignment firstLoopAssignment = assignments.get(0);
 
-				for(String reference : la.getReferences())
+				for(String reference : firstLoopAssignment.getReferences())
 				{
 					addDataDependencyEdges(lastAssignment.getNode(), reference, programDependencyGraph);
 				}
 			}
 		}
+	}
+
+	private Map<String, List<VariableAssignment>> getChildNodesAssignments(ControlNodePDG controlNode) {
+		return this.getChildNodesAssignments(controlNode, new HashMap<String, List<VariableAssignment>>());
+	}
+
+	private Map<String, List<VariableAssignment>> getChildNodesAssignments(ControlNodePDG controlNode, Map<String, List<VariableAssignment>> variableAssignments) {
+		for (ControlNodePDG node : controlNode.getChildNodes())
+		{
+			getChildNodesAssignments(node, variableAssignments);
+		}
+
+		Map<String, List<VariableAssignment>> nodeVariableAssignments = controlNode.getAssignments();
+
+		for (String variable : nodeVariableAssignments.keySet())
+		{
+			if (variableAssignments.containsKey(variable))
+			{
+				variableAssignments.get(variable).addAll(nodeVariableAssignments.get(variable));
+			}
+			else
+			{
+				variableAssignments.put(variable, nodeVariableAssignments.get(variable));
+			}
+
+		}
+
+		return variableAssignments;
 	}
 
 	/**
