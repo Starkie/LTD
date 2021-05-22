@@ -220,7 +220,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		ControlNodePDG whileControlNode = new ControlNodePDG(ControlNodeType.WHILE,  whileNode);
 
-		visitLoop(whileControlNode, whileStmt.getCondition(), whileStmt.getBody(), programDependencyGraph, null);
+		visitLoop(whileControlNode, whileStmt.getCondition(), whileStmt.getBody(), programDependencyGraph);
 	}
 
 	/**
@@ -234,7 +234,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		ControlNodePDG doWhileControlNode = new ControlNodePDG(ControlNodeType.DO,  doWhileNode);
 
-		visitLoop(doWhileControlNode, doStmt.getCondition(), doStmt.getBody(), programDependencyGraph, null);
+		visitLoop(doWhileControlNode, doStmt.getCondition(), doStmt.getBody(), programDependencyGraph);
 	}
 
 	/**
@@ -247,9 +247,15 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
 		ControlNodePDG forControlNode = new ControlNodePDG(ControlNodeType.FOR, forNode);
+		
+		// Add the edges for the initialization nodes.
+		for (Expression node : forStmt.getInitialization())
+		{
+			this.visit(new ExpressionStmt(node), programDependencyGraph);
+		}
 
 		// TODO: Can the Compare be null?
-		visitLoop(forControlNode, forStmt.getCompare().get(), forStmt.getBody(), programDependencyGraph, forStmt.getInitialization());
+		visitLoop(forControlNode, forStmt.getCompare().get(), forStmt.getBody(), programDependencyGraph);
 	}
 
 	/**
@@ -270,7 +276,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			.getVariables()
 			.forEach(v -> this.visit(v, programDependencyGraph));
 
-		visitLoop(foreachControlNode, forEachStmt.getIterable(), forEachStmt.getBody(), programDependencyGraph, null);
+		visitLoop(foreachControlNode, forEachStmt.getIterable(), forEachStmt.getBody(), programDependencyGraph);
 	}
 
 	/**
@@ -281,7 +287,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 * @param programDependencyGraph The program dependency graph.
 	 * @param initializationExpressions (Optional) The initialization expressions, if any, for the loop counter variables.
 	 */
-	private void visitLoop(ControlNodePDG controlNode, Expression loopCondition, Statement loopBody, ProgramDependencyGraph programDependencyGraph, List<Expression> initializationExpressions)
+	private void visitLoop(ControlNodePDG controlNode, Expression loopCondition, Statement loopBody, ProgramDependencyGraph programDependencyGraph)
 	{
 		// Create the edges from the previous node to the loop.
 		createEdges(controlNode.getNode(), programDependencyGraph);
@@ -294,15 +300,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			// The first reference should not be registered in DO-WHILE statements.
 			// The body is always executed one time before evaluating the condition.
 			registerConditionDataDependencies(controlNode.getNode(), loopCondition, programDependencyGraph);
-		}
-
-		// Add the edges for the initialization nodes.
-		if (initializationExpressions != null)
-		{
-			for (Expression node : initializationExpressions)
-			{
-				this.visit(new ExpressionStmt(node), programDependencyGraph);
-			}
 		}
 
 		// Create the edges to the loop's child nodes.
