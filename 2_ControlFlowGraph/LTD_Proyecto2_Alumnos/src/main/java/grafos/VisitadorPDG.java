@@ -189,7 +189,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		createEdges(ifNode, programDependencyGraph);
 		// Push the if control node to the stack.
 		ControlNodePDG ifControlNode = new ControlNodePDG(ControlNodeType.IF, ifNode);
-		this.controlNodes.push(ifControlNode);
+		addNewControlNode(ifControlNode);
 
         registerConditionDataDependencies(ifNode, ifStmt.getCondition(), programDependencyGraph);
 
@@ -285,7 +285,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Create the edges from the previous node to the loop.
 		createEdges(controlNode.getNode(), programDependencyGraph);
 
-		this.controlNodes.push(controlNode);
+		addNewControlNode(controlNode);
 
 		// Register the variable references from the condition, if any exists.
 		if (controlNode.getType() != ControlNodeType.DO)
@@ -317,6 +317,14 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		this.controlNodes.pop();
 	}
 
+	private void addNewControlNode(ControlNodePDG controlNode) {
+		// Add as a children of the current parent node.
+		this.controlNodes.peek().getChildNodes().add(controlNode);
+
+		// Add it to the stack.
+		this.controlNodes.push(controlNode);
+	}
+
 	/**
 	 * Visits a {@link SwitchStmt} and registers all the nodes into the {@link ProgramDependencyGraph}.
 	 * @param switchStatement The switch statement.
@@ -333,7 +341,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Stack the switch control node.
 		ControlNodePDG switchControlNode = new ControlNodePDG(ControlNodeType.SWITCH,  switchNode);
-		this.controlNodes.push(switchControlNode);
+		addNewControlNode(switchControlNode);
 
 		// Visit all the nested entries.
 		super.visit(switchStmt, programDependencyGraph);
@@ -358,7 +366,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Stack the switch control node.
 		ControlNodePDG switchEntryControlNode = new ControlNodePDG(ControlNodeType.SWITCH_CASE,  switchEntryNode);
-		this.controlNodes.push(switchEntryControlNode);
+		addNewControlNode(switchEntryControlNode);
 
 		// Visit the switch entry.
 		super.visit(switchEntryStatement, programDependencyGraph);
