@@ -82,6 +82,12 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 	@Override
 	public void visit(VariableDeclarator variableDeclarator, ProgramDependencyGraph programDependencyGraph) {
+		// If the variable declaration does not have an initializer, do not register it as a dependency.
+		if (variableDeclarator.getInitializer().isEmpty())
+		{
+			return;
+		}
+
 		// Add the variable to the data dependency dictionary.
 		String variableName = variableDeclarator.getNameAsString();
 
