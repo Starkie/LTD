@@ -76,6 +76,7 @@ public class Transformador {
 		System.out.print("\nGenerando PDF...");
 	    GraphViz gv=new GraphViz();
 	    gv.addln(gv.start_graph());
+	    gv.add("splines = true;");
 	    gv.add(dotInfo);
 	    gv.addln(gv.end_graph());
 	    String type = "pdf";   // String type = "gif";

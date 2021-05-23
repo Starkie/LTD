@@ -17,15 +17,19 @@ public class ControlNodePDG extends ControlNodeBase {
 	
 	private List<ControlNodeBlockStatement> blocks;
 
-	public ControlNodePDG(ControlNodeType type, String node) {
+	private ControlNodePDG parent;
+
+	public ControlNodePDG(ControlNodeType type, String node, ControlNodePDG parent) {
 		super(type);
 
 		this.node = node;
 		
+		this.parent = parent;
+		
 		this.blocks = new ArrayList<ControlNodeBlockStatement>();
 		
 		// Create the default block.
-		this.blocks.add(new ControlNodeBlockStatement());
+		this.blocks.add(new ControlNodeBlockStatement(this));
 	}
 
 	public String getNode() {
@@ -38,7 +42,7 @@ public class ControlNodePDG extends ControlNodeBase {
 	
 	public void startNewBlock()
 	{
-		this.blocks.add(new ControlNodeBlockStatement());
+		this.blocks.add(new ControlNodeBlockStatement(this));
 	}
 	
 	public ControlNodeBlockStatement getCurrentBlock() {
@@ -52,46 +56,8 @@ public class ControlNodePDG extends ControlNodeBase {
 			.flatMap(List::stream)
 			.collect(Collectors.toList());
 	}
-	
-	/**
-	 * Returns the variable assignments inside the given control node or its children.
-	 * @param controlNode The control node.
-	 * @return The variable assignments that were performed in the control node.
-	 */
-	public Map<String, List<VariableAssignment>> getAllAssignments() {
-		return this.getChildNodesAssignments(this, new HashMap<String, List<VariableAssignment>>());
-	}
-	
-	/**
-	 * Returns the variable assignments inside the given control node or its children.
-	 * @param controlNode The control node.
-	 * @return The variable assignments that were performed in the control node.
-	 */
-	private Map<String, List<VariableAssignment>> getChildNodesAssignments(ControlNodePDG controlNode, Map<String, List<VariableAssignment>> variableAssignments) {
-		for (ControlNodePDG node : controlNode.getAllChildNodes())
-		{
-			getChildNodesAssignments(node, variableAssignments);
-		}
-		
-		for (ControlNodeBlockStatement block : controlNode.getBlocks())
-		{
-			Map<String, List<VariableAssignment>> nodeVariableAssignments = block.getAssignments();
-			
-			for (String variable : nodeVariableAssignments.keySet())
-			{
-				if (variableAssignments.containsKey(variable))
-				{
-					variableAssignments.get(variable).addAll(nodeVariableAssignments.get(variable));
-				}
-				else
-				{
-					variableAssignments.put(variable, nodeVariableAssignments.get(variable));
-				}
-				
-			}
-		}
 
-		return variableAssignments;
+	ControlNodePDG getParent() {
+		return parent;
 	}
-
 }
