@@ -1,7 +1,10 @@
 package grafos.nodes;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -63,6 +66,31 @@ public class ControlNodePDG extends NodeBase {
 
 	public ControlNodePDG getParent() {
 		return parent;
+	}
+
+	public Map<String, List<VariableAssignment>> getLastAssignments()
+	{
+		Map<String, List<VariableAssignment>> variableAssignments = new HashMap<String, List<VariableAssignment>>();
+
+		List<String> variableNames = this.getAssignedVariablesName();
+
+		for (String variable : variableNames)
+		{
+			variableAssignments.put(variable, this.getLastAssignments(variable));
+		}
+
+		return variableAssignments;
+	}
+
+	public List<String> getAssignedVariablesName() {
+		List<String> variableNames = new ArrayList<String>();
+
+		for (ControlNodeBlockStatement block : this.blocks)
+		{
+			variableNames.addAll(block.getAssignedVariablesName());
+		}
+
+		return variableNames;
 	}
 
 	public List<VariableAssignment> getLastAssignments(String variableName)

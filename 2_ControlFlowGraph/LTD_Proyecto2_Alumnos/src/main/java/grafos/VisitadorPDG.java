@@ -390,50 +390,41 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 * @param programDependencyGraph The program dependency graph.
 	 */
 	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
+
 		// Get all the variable assignment from this control node and its children.
-		Map<String, Map<ControlNodePDG, List<VariableAssignment>>> loopAssignments = controlNode.getCurrentBlock().getAssignments();
+		Map<String, List<VariableAssignment>> loopAssignments = controlNode.getLastAssignments();
 
 		// For each variable that has been assigned inside the loop or its children.
 		for (String variableName : loopAssignments.keySet())
 		{
-			Map<ControlNodePDG, List<VariableAssignment>> loopCurrentVariableAssignments = loopAssignments.get(variableName);
+			List<VariableAssignment> loopCurrentVariableAssignments = loopAssignments.get(variableName);
 
-			// Get the last assignment of the variable from each child control node.
-			List<VariableAssignment> currentVariableLastAssignments = loopCurrentVariableAssignments
-					.values()
-					.stream()
-					.map(a -> a.get(a.size() - 1))
-					.collect(Collectors.toList());
-
-			for (VariableAssignment lastAssignment : currentVariableLastAssignments)
+			for (VariableAssignment va : loopCurrentVariableAssignments)
 			{
-				ControlNodePDG node = null;
-
-				Map<ControlNodePDG, List<VariableAssignment>> nodeAssignments = null;
-
-				for (int i = this.controlNodes.size() -1 ; i >= 0; i--)
+				for (int i = this.controlNodes.size() - 1; i >= 0; i--)
 				{
-					node = this.controlNodes.get(i);
+					ControlNodePDG node = this.controlNodes.get(i);
 
-					nodeAssignments = node.getCurrentBlock().getAssignments().get(variableName);
+					List<VariableAssignment> assignments = node.getLastAssignments(variableName);
 
-					if (nodeAssignments == null)
+					VariableAssignment assignment = null;
+
+					// If the node type is a loop, we want to retrieve its first assignment.
+					// That way, we can copy its references and link them to the last assignment from the loop.
+					if (node.getType().isLoopType())
 					{
-						continue;
+						assignment = assignments.get(0);
+					}
+					else
+					{
+						// If it wasn't a loop node, get the last assignment from the variables.
+						assignment = assignments.get(assignments.size() -1);
 					}
 
-					List<VariableAssignment> currentVariableFirstAssignments = nodeAssignments
-						.values()
-						.stream()
-						.map(a -> a.get(0))
-						.collect(Collectors.toList());
-
-					for (VariableAssignment va : currentVariableFirstAssignments)
+					// Copy the assignment variables from the last assignment in the loop to the references of the first declaration.
+					for(String reference : assignment.getReferences())
 					{
-						for (String reference : va.getReferences())
-						{
-							addDataDependencyEdges(lastAssignment.getNode(), reference, programDependencyGraph);
-						}
+						addDataDependencyEdges(va.getNode(), reference, programDependencyGraph);
 					}
 				}
 			}
@@ -464,7 +455,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		List<VariableAssignment> assignments = null;
 
 		ControlNodePDG controlNode = this.controlNodes.peek();
-		
+
 		boolean getOnlyCurrentBlockAssignments = false;
 
 		do
