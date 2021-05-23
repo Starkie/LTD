@@ -8,7 +8,7 @@ import java.util.List;
  * These are special nodes that have an effect on how the control graph
  * is generated. 
  */
-public class ControlNodeCFG extends ControlNodeBase {
+public class ControlNodeCFG extends NodeBase {
 	// The nodes that must be used when exiting the control node.
 	private List<String> exitNodes;
 
@@ -17,7 +17,7 @@ public class ControlNodeCFG extends ControlNodeBase {
 	 * @param type The type of the control node.
 	 * @param exitNode The node that must be used when exiting the control node.
 	 */
-	public ControlNodeCFG(ControlNodeType type, String exitNode) {
+	public ControlNodeCFG(NodeType type, String exitNode) {
 		super(type);
 		
 		this.exitNodes = new ArrayList<String>();

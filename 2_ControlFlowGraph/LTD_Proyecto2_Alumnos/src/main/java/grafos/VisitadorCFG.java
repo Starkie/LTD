@@ -21,7 +21,7 @@ import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import grafos.nodes.ControlNodeCFG;
-import grafos.nodes.ControlNodeType;
+import grafos.nodes.NodeType;
 
 
 public class VisitadorCFG extends VoidVisitorAdapter<CFG>
@@ -91,7 +91,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		// Create the arcs to the 'if' child nodes.
 		this.nodoAnterior = ifNode;
 
-		ControlNodeCFG ifControlNode = new ControlNodeCFG(ControlNodeType.IF,  ifNode);
+		ControlNodeCFG ifControlNode = new ControlNodeCFG(NodeType.IF,  ifNode);
 		this.controlNodes.push(ifControlNode);
 
 		// First visit the 'then' statement, that will always be present.
@@ -131,7 +131,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	public void visit(WhileStmt whileStmt, CFG cfg) {
 		String whileNode = crearNodo("while (" + whileStmt.getCondition() + ")");
 
-		ControlNodeCFG whileControlNode = new ControlNodeCFG(ControlNodeType.WHILE,  whileNode);
+		ControlNodeCFG whileControlNode = new ControlNodeCFG(NodeType.WHILE,  whileNode);
 		this.controlNodes.push(whileControlNode);
 
 		visitLoop(whileStmt.getBody(), cfg, whileNode);
@@ -159,7 +159,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 
 		String forNode = crearNodo("for (" + forStmt.getCompare().get() + ")");
 
-		ControlNodeCFG forControlNode = new ControlNodeCFG(ControlNodeType.FOR,  forNode);
+		ControlNodeCFG forControlNode = new ControlNodeCFG(NodeType.FOR,  forNode);
 		this.controlNodes.push(forControlNode);
 
 		// Add the update statements to the end of the body.
@@ -187,7 +187,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	public void visit(ForeachStmt forEachStmt, CFG cfg) {
 		String foreachNode = crearNodo("foreach (" + forEachStmt.getVariable() + " : " + forEachStmt.getIterable() + ")");
 
-		ControlNodeCFG foreachControlNode = new ControlNodeCFG(ControlNodeType.FOREACH,  foreachNode);
+		ControlNodeCFG foreachControlNode = new ControlNodeCFG(NodeType.FOREACH,  foreachNode);
 		this.controlNodes.push(foreachControlNode);
 
 		visitLoop(forEachStmt.getBody(), cfg, foreachNode);
@@ -229,7 +229,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 	 */
 	@Override
 	public void visit(DoStmt doStmt, CFG cfg) {
-		ControlNodeCFG doWhileControlNode = new ControlNodeCFG(ControlNodeType.DO,  null);
+		ControlNodeCFG doWhileControlNode = new ControlNodeCFG(NodeType.DO,  null);
 		this.controlNodes.push(doWhileControlNode);
 
 		// Create the arcs to the 'do' statement child nodes.
@@ -270,7 +270,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		crearArcos(cfg);
 
 		// Stack the switch control node.
-		ControlNodeCFG switchControlNode = new ControlNodeCFG(ControlNodeType.SWITCH,  null);
+		ControlNodeCFG switchControlNode = new ControlNodeCFG(NodeType.SWITCH,  null);
 		this.controlNodes.push(switchControlNode);
 
 		int aux = 0;
@@ -328,7 +328,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		{
 			switchControlNode = this.controlNodes.get(i);
 
-			if (switchControlNode.getType() == ControlNodeType.SWITCH)
+			if (switchControlNode.getType() == NodeType.SWITCH)
 			{
 				break;
 			}
@@ -367,7 +367,7 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		// If the current control node is a Do-While with no exit code, this means that
 		// this must be the first instruction of its body.
 		if (lastControlNode != null
-			&& lastControlNode.getType() == ControlNodeType.DO
+			&& lastControlNode.getType() == NodeType.DO
 			&& lastControlNode.getExitNodes().isEmpty())
 		{
 			// Because the do-while statement needs to loop back to this instruction,

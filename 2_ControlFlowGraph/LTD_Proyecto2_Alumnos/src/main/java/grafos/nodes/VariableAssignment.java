@@ -1,11 +1,9 @@
 package grafos.nodes;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-public class VariableAssignment {	
+public class VariableAssignment extends NodeBase {	
 	private String variableName;
 	private String node;
 	private ControlNodePDG parent;
@@ -14,6 +12,8 @@ public class VariableAssignment {
 	private List<String> references;
 	
 	public VariableAssignment(String variableName, String node, ControlNodePDG parent) {
+		super(NodeType.VARIABLE_ASSIGNATION);
+		
 		this.variableName = variableName;
 		this.node = node;
 		this.parent = parent;

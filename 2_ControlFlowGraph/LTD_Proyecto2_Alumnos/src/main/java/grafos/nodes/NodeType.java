@@ -4,7 +4,7 @@ package grafos.nodes;
  * Represents the type of a control node.
  * The type is needed because each of them requires a different treatment.
  */
-public enum ControlNodeType {
+public enum NodeType {
 	METHOD,
 	IF,
 	WHILE,
@@ -12,7 +12,8 @@ public enum ControlNodeType {
 	FOR,
 	FOREACH,
 	SWITCH,
-	SWITCH_CASE;
+	SWITCH_CASE,
+	VARIABLE_ASSIGNATION;
 
 	public boolean isLoopType()
 	{

@@ -1,9 +1,7 @@
 package grafos.nodes;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -11,7 +9,7 @@ import java.util.stream.Collectors;
  * These are special nodes that have an effect on how the program dependency graph
  * is generated.
  */
-public class ControlNodePDG extends ControlNodeBase {
+public class ControlNodePDG extends NodeBase {
 	// The node that the instruction represents.
 	private String node;
 	
@@ -19,7 +17,7 @@ public class ControlNodePDG extends ControlNodeBase {
 
 	private ControlNodePDG parent;
 
-	public ControlNodePDG(ControlNodeType type, String node, ControlNodePDG parent) {
+	public ControlNodePDG(NodeType type, String node, ControlNodePDG parent) {
 		super(type);
 
 		this.node = node;
@@ -50,14 +48,37 @@ public class ControlNodePDG extends ControlNodeBase {
 		return this.blocks.get(this.blocks.size() - 1);
 	}
 	
-	public List<ControlNodePDG> getAllChildNodes() {
+	public List<NodeBase> getAllChildNodes() {
 		return this.blocks.stream()
 			.map(cnbs -> cnbs.getChildNodes())
 			.flatMap(List::stream)
 			.collect(Collectors.toList());
 	}
 
-	ControlNodePDG getParent() {
+	public ControlNodePDG getParent() {
 		return parent;
+	}
+	
+	public List<VariableAssignment> getLastAssignments(String variableName)
+	{
+		return this.getLastAssignments(variableName, false);
+	}
+	
+	public List<VariableAssignment> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
+	{
+		List<VariableAssignment> variableAssignments = new ArrayList<VariableAssignment>();
+		
+		if (onlyCurrentBlockAssignments)
+		{
+			variableAssignments.addAll(this.getCurrentBlock().getLastAssignments(variableName));
+		}
+		else {			
+			for (ControlNodeBlockStatement block : this.blocks)
+			{
+				variableAssignments.addAll(block.getLastAssignments(variableName));
+			}
+		}		
+						
+		return variableAssignments;
 	}
 }
