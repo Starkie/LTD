@@ -205,6 +205,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 			super.visit(convertirEnBloque(elseStmt.get()), programDependencyGraph);
 		}
 
+		// TODO; Antes de desapilar el if, ¿comprobar si hay un bucle en el nivel superior y rellenar las propiedades?
+
 		// Pop the node since it's not needed anymore.
 		this.controlNodes.pop();
 	}
@@ -409,31 +411,48 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	 * @param programDependencyGraph The program dependency graph.
 	 */
 	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
-		Map<String, List<VariableAssignment>> loopAssignments = this.getChildNodesAssignments(controlNode);
+		// Get all the variable assignment from this control node and its children.
+		Map<String, List<VariableAssignment>> loopAssignments = this.geNodesAssignments(controlNode);
 
+		// For each variable that has been assigned inside the loop or its children.
 		for (String variableName : loopAssignments.keySet())
 		{
 			ControlNodePDG node = null;
 
-			List<VariableAssignment> assignments1 = loopAssignments.get(variableName);
+			List<VariableAssignment> variableAssignments = loopAssignments.get(variableName);
 
-			VariableAssignment lastAssignment = assignments1.get(assignments1.size() - 1);
+			// Get the last variable assignment that was performed.
+			VariableAssignment lastAssignment = variableAssignments.get(variableAssignments.size() - 1);
 
+			// From the current node, go backwards adding references to this variable assignment if needed.
 			for (int i = this.controlNodes.size() -1; i >= 0; i--)
 			{
 				node = this.controlNodes.get(i);
 
-				if (!node.getType().isLoopType()
-					|| !node.getAssignments().containsKey(variableName))
+				// If there was no assignment of the current variable in this node, continue upwards.
+				if (!node.getAssignments().containsKey(variableName))
 				{
 					continue;
 				}
 
 				List<VariableAssignment> assignments = node.getAssignments().get(variableName);
+				
+				VariableAssignment assignment = null; 
+				
+				// If the node type is a loop, we want to retrieve its first assignment.
+				// That way, we can copy its references and link them to the last assignment from the loop.
+				if (node.getType().isLoopType())
+				{
+					assignment = assignments.get(0);
+				}
+				else 
+				{
+					// If it wasn't a loop node, get the last assignment from the variables.
+					assignment = assignments.get(assignments.size() -1);
+				}
 
-				VariableAssignment firstLoopAssignment = assignments.get(0);
-
-				for(String reference : firstLoopAssignment.getReferences())
+				// Copy the assignment variables from the last assignment in the loop to the references of the first declaration.
+				for(String reference : assignment.getReferences())
 				{
 					addDataDependencyEdges(lastAssignment.getNode(), reference, programDependencyGraph);
 				}
@@ -441,10 +460,20 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		}
 	}
 
-	private Map<String, List<VariableAssignment>> getChildNodesAssignments(ControlNodePDG controlNode) {
+	/**
+	 * Returns the variable assignments inside the given control node or its children.
+	 * @param controlNode The control node.
+	 * @return The variable assignments that were performed in the control node.
+	 */
+	private Map<String, List<VariableAssignment>> geNodesAssignments(ControlNodePDG controlNode) {
 		return this.getChildNodesAssignments(controlNode, new HashMap<String, List<VariableAssignment>>());
 	}
 
+	/**
+	 * Returns the variable assignments inside the given control node or its children.
+	 * @param controlNode The control node.
+	 * @return The variable assignments that were performed in the control node.
+	 */
 	private Map<String, List<VariableAssignment>> getChildNodesAssignments(ControlNodePDG controlNode, Map<String, List<VariableAssignment>> variableAssignments) {
 		for (ControlNodePDG node : controlNode.getChildNodes())
 		{
@@ -488,7 +517,26 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 		// Add at the end of the list the new variable assignment. The last assignment will be the only valid one.
 		// The others are kept for reference in case they are needed for loops.
-		assignments.get(variableName).add(new VariableAssignment(variableName, assignmentNode, currentControlNode));
+		VariableAssignment newAssignment  = new VariableAssignment(variableName, assignmentNode, currentControlNode);
+		
+		assignments.get(variableName).add(newAssignment);
+		
+		// Check if any of the parents has any value for this variable and declare it as a scope.
+		for (int i = this.controlNodes.size() - 2; i >= 0; i--)
+		{
+			ControlNodePDG node = this.controlNodes.get(i);
+			
+			if (node.getAssignments().containsKey(variableName))
+			{
+				List<VariableAssignment> assignments2 = node.getAssignments().get(variableName);
+				
+				VariableAssignment lastAssignment = assignments2.get(assignments2.size() - 1);
+				
+				lastAssignment.getScopeOverrides().put(currentControlNode, newAssignment);
+				
+				break;
+			}
+		}
 	}
 
 	/**
@@ -518,6 +566,16 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 					nodeReferences.add(targetNode);
 
 					addDataDependencyEdges(variableAssignment.getNode(), this.currentNode, programDependencyGraph);
+					
+					
+					// If there is any variable assignment that overrides this one in a nested scope,
+					// a reference to this assignment must be added.
+					for (VariableAssignment a : variableAssignment.getScopeOverrides().values())
+					{
+						a.getReferences().add(targetNode);
+						
+						addDataDependencyEdges(a.getNode(), this.currentNode, programDependencyGraph);	
+					}
 				}
 
 				// TODO: Solo salimos si la variable ha sido definida en este nivel o uno superior.
@@ -584,7 +642,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	private void addDataDependencyEdges(String sourceNode, String targetNode, ProgramDependencyGraph programDependencyGraph) {
 		System.out.println("DATOS NODO: " + targetNode);
 
-		String edge = sourceNode + "->" + targetNode + "[color=red, style=dashed, constraint = false];";
+		String edge = sourceNode + "->" + targetNode + "[color=red, constraint = false];";
 
 		if (!programDependencyGraph.dataEdges.contains(edge))
 		{
