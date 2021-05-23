@@ -13,17 +13,12 @@ public class VariableAssignment {
 	// All the nodes that reference this variable assignments.
 	private List<String> references;
 	
-	// Represents all the values that override this assignment in a nested scope.
-	private Map<ControlNodePDG, VariableAssignment> scopeOverrides;
-	
 	public VariableAssignment(String variableName, String node, ControlNodePDG parent) {
 		this.variableName = variableName;
 		this.node = node;
 		this.parent = parent;
 		
 		this.references = new ArrayList<String>();
-		
-		this.scopeOverrides = new HashMap<ControlNodePDG, VariableAssignment>();
 	}
 
 	public String getVariableName() {
@@ -40,9 +35,5 @@ public class VariableAssignment {
 
 	public List<String> getReferences() {
 		return references;
-	}
-
-	public Map<ControlNodePDG, VariableAssignment> getScopeOverrides() {
-		return scopeOverrides;
 	}
 }
