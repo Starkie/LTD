@@ -298,7 +298,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 	private void addNewControlNode(ControlNodePDG controlNode) {
 		// Add as a children of the current parent node.
-		this.controlNodes.peek().getAllChildNodes().add(controlNode);
+		this.controlNodes.peek().addChildNode(controlNode);
 
 		// Add it to the stack.
 		this.controlNodes.push(controlNode);
@@ -392,48 +392,48 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	private void registerLoopNextIterationDataDependencies(ControlNodePDG controlNode, Expression loopCondition, ProgramDependencyGraph programDependencyGraph) {
 		// Get all the variable assignment from this control node and its children.
 		Map<String, Map<ControlNodePDG, List<VariableAssignment>>> loopAssignments = controlNode.getCurrentBlock().getAssignments();
-		
+
 		// For each variable that has been assigned inside the loop or its children.
 		for (String variableName : loopAssignments.keySet())
 		{
 			Map<ControlNodePDG, List<VariableAssignment>> loopCurrentVariableAssignments = loopAssignments.get(variableName);
-			
+
 			// Get the last assignment of the variable from each child control node.
 			List<VariableAssignment> currentVariableLastAssignments = loopCurrentVariableAssignments
 					.values()
 					.stream()
 					.map(a -> a.get(a.size() - 1))
 					.collect(Collectors.toList());
-			
+
 			for (VariableAssignment lastAssignment : currentVariableLastAssignments)
 			{
 				ControlNodePDG node = null;
-				
+
 				Map<ControlNodePDG, List<VariableAssignment>> nodeAssignments = null;
-				
+
 				for (int i = this.controlNodes.size() -1 ; i >= 0; i--)
 				{
 					node = this.controlNodes.get(i);
-					
-					nodeAssignments = node.getCurrentBlock().getAssignments().get(variableName);					
-				
+
+					nodeAssignments = node.getCurrentBlock().getAssignments().get(variableName);
+
 					if (nodeAssignments == null)
 					{
 						continue;
 					}
-					
+
 					List<VariableAssignment> currentVariableFirstAssignments = nodeAssignments
 						.values()
 						.stream()
 						.map(a -> a.get(0))
 						.collect(Collectors.toList());
-					
+
 					for (VariableAssignment va : currentVariableFirstAssignments)
 					{
 						for (String reference : va.getReferences())
 						{
 							addDataDependencyEdges(lastAssignment.getNode(), reference, programDependencyGraph);
-						}								
+						}
 					}
 				}
 			}
@@ -457,31 +457,31 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	/**
 	 * Registers a data dependency from the target node to the given variable assignments.
 	 * @param sourceVariableAssignments The nodes where the current variable was assigned.
-	 * @param targetNode The node which references the variable.
+	 * @param referenceNode The node that references the variable.
 	 * @param programDependencyGraph The program dependency graph.
 	 */
-	private void registerVariableReference(String variableName, String targetNode, ProgramDependencyGraph programDependencyGraph) {	
+	private void registerVariableReference(String variableName, String referenceNode, ProgramDependencyGraph programDependencyGraph) {
 		List<VariableAssignment> assignments = null;
-		
+
 		ControlNodePDG controlNode = this.controlNodes.peek();
 
 		do
-		{	
+		{
 			boolean getOnlyCurrentBlockAssignments = controlNode.getType() == NodeType.IF;
-			
+
 			assignments = controlNode.getLastAssignments(variableName, getOnlyCurrentBlockAssignments);
-			
+
 			controlNode = controlNode.getParent();
-		} 
+		}
 		while (assignments.size() == 0 && controlNode != null);
-		
+
 		for (VariableAssignment va : assignments)
 		{
 			List<String> nodeReferences = va.getReferences();
 
-			if (!nodeReferences.contains(targetNode))
+			if (!nodeReferences.contains(referenceNode))
 			{
-				nodeReferences.add(targetNode);
+				nodeReferences.add(referenceNode);
 
 				addDataDependencyEdges(va.getNode(), this.currentNode, programDependencyGraph);
 			}

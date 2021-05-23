@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 public class ControlNodePDG extends NodeBase {
 	// The node that the instruction represents.
 	private String node;
-	
+
 	private List<ControlNodeBlockStatement> blocks;
 
 	private ControlNodePDG parent;
@@ -21,11 +21,11 @@ public class ControlNodePDG extends NodeBase {
 		super(type);
 
 		this.node = node;
-		
+
 		this.parent = parent;
-		
+
 		this.blocks = new ArrayList<ControlNodeBlockStatement>();
-		
+
 		// Create the default block.
 		this.blocks.add(new ControlNodeBlockStatement(this));
 	}
@@ -34,20 +34,26 @@ public class ControlNodePDG extends NodeBase {
 		return node;
 	}
 
+	public void addChildNode(NodeBase node)
+	{
+		// Add the node to the current block.
+		this.getCurrentBlock().getChildNodes().add(node);
+	}
+
 	public List<ControlNodeBlockStatement> getBlocks() {
 		return blocks;
 	}
-	
+
 	public void startNewBlock()
 	{
 		this.blocks.add(new ControlNodeBlockStatement(this));
 	}
-	
+
 	public ControlNodeBlockStatement getCurrentBlock() {
 		// Get the last block in the list.
 		return this.blocks.get(this.blocks.size() - 1);
 	}
-	
+
 	public List<NodeBase> getAllChildNodes() {
 		return this.blocks.stream()
 			.map(cnbs -> cnbs.getChildNodes())
@@ -58,27 +64,27 @@ public class ControlNodePDG extends NodeBase {
 	public ControlNodePDG getParent() {
 		return parent;
 	}
-	
+
 	public List<VariableAssignment> getLastAssignments(String variableName)
 	{
 		return this.getLastAssignments(variableName, false);
 	}
-	
+
 	public List<VariableAssignment> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
 	{
 		List<VariableAssignment> variableAssignments = new ArrayList<VariableAssignment>();
-		
+
 		if (onlyCurrentBlockAssignments)
 		{
 			variableAssignments.addAll(this.getCurrentBlock().getLastAssignments(variableName));
 		}
-		else {			
+		else {
 			for (ControlNodeBlockStatement block : this.blocks)
 			{
 				variableAssignments.addAll(block.getLastAssignments(variableName));
 			}
-		}		
-						
+		}
+
 		return variableAssignments;
 	}
 }
