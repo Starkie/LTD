@@ -92,10 +92,7 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Add the variable to the data dependency dictionary.
 		String variableName = variableDeclarator.getNameAsString();
 
-		if (isVariableAssigned(variableName))
-		{
-			registerVariableReference(variableName, this.currentNode, programDependencyGraph);
-		}
+		registerVariableReference(variableName, this.currentNode, programDependencyGraph);
 
 		registerVariableAssignment(variableName, this.currentNode, programDependencyGraph);
 
@@ -107,8 +104,9 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		String variableName = nameExpr.getNameAsString();
 
 		// Only add the variable when visiting from another another node from a special type.
-		if (isVariableAssigned(variableName)
-			&& (this.isInsideAssign || this.isPartOfCondition || this.isParameterOfMethodCall))
+		if (this.isInsideAssign 
+			|| this.isPartOfCondition 
+			|| this.isParameterOfMethodCall)
 		{
 			registerVariableReference(variableName, this.currentNode, programDependencyGraph);
 		}
@@ -124,11 +122,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 
 			String variableName = nameExpr.getNameAsString();
 
-			if (isVariableAssigned(variableName))
-			{
-				// Add a data dependency to previous variable definition.
-				registerVariableReference(variableName, this.currentNode, programDependencyGraph);
-			}
+			// Add a data dependency to previous variable definition.
+			registerVariableReference(variableName, this.currentNode, programDependencyGraph);
 
 			this.registerVariableAssignment(variableName, this.currentNode, programDependencyGraph);
 		}
@@ -149,30 +144,11 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// If an assign operation does more than just assigning values, it would read the value from the previous variable.
 		if (assignExpr.getOperator() != Operator.ASSIGN)
 		{
-			if (isVariableAssigned(variableName))
-			{
-				// Add a data dependency to previous variable definition.
-				registerVariableReference(variableName, this.currentNode, programDependencyGrah);
-			}
+			// Add a data dependency to previous variable definition.
+			registerVariableReference(variableName, this.currentNode, programDependencyGrah);
 		}
 
 		this.registerVariableAssignment(variableName, this.currentNode, programDependencyGrah);
-	}
-
-	private boolean isVariableAssigned(String variableName) {
-		ControlNodePDG controlNode = null;
-
-		for (int i = this.controlNodes.size() -1; i >= 0; i--)
-		{
-			controlNode = this.controlNodes.get(i);
-
-			if (controlNode.getCurrentBlock().getAssignments().containsKey(variableName))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**
