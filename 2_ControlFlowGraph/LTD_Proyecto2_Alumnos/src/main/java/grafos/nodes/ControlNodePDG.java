@@ -76,12 +76,12 @@ public class ControlNodePDG extends NodeBase {
 
 		if (onlyCurrentBlockAssignments)
 		{
-			variableAssignments.addAll(this.getCurrentBlock().getLastAssignments(variableName));
+			variableAssignments.addAll(this.getCurrentBlock().getLastAssignments(variableName, onlyCurrentBlockAssignments));
 		}
 		else {
 			for (ControlNodeBlockStatement block : this.blocks)
 			{
-				variableAssignments.addAll(block.getLastAssignments(variableName));
+				variableAssignments.addAll(block.getLastAssignments(variableName, onlyCurrentBlockAssignments));
 			}
 		}
 

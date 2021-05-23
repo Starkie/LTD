@@ -464,10 +464,14 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		List<VariableAssignment> assignments = null;
 
 		ControlNodePDG controlNode = this.controlNodes.peek();
+		
+		boolean getOnlyCurrentBlockAssignments = false;
 
 		do
 		{
-			boolean getOnlyCurrentBlockAssignments = controlNode.getType() == NodeType.IF;
+			// If an IF statement is found as a parent node, only the current branch must be
+			// traversed. Otherwise, assignments from other branches would be added.
+			getOnlyCurrentBlockAssignments |= controlNode.getType() == NodeType.IF;
 
 			assignments = controlNode.getLastAssignments(variableName, getOnlyCurrentBlockAssignments);
 

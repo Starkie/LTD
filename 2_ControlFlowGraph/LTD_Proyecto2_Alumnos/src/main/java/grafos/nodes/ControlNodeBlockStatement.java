@@ -40,6 +40,11 @@ public class ControlNodeBlockStatement {
 	
 	public List<VariableAssignment> getLastAssignments(String variableName)
 	{
+		return this.getLastAssignments(variableName, false);
+	}
+	
+	public List<VariableAssignment> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
+	{
 		List<VariableAssignment> variableAssignments = new ArrayList<VariableAssignment>();
 		
 		for (int i = (this.childNodes.size() - 1); i >= 0; i--)
@@ -60,7 +65,7 @@ public class ControlNodeBlockStatement {
 			{
 				ControlNodePDG node = (ControlNodePDG) this.childNodes.get(i);
 				
-				variableAssignments.addAll(node.getLastAssignments(variableName));
+				variableAssignments.addAll(node.getLastAssignments(variableName, onlyCurrentBlockAssignments));
 			}
 		}
 		
