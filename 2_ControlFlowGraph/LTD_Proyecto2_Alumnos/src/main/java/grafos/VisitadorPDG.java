@@ -1,8 +1,6 @@
 package grafos;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +28,11 @@ import com.github.javaparser.ast.stmt.SwitchEntryStmt;
 import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import com.google.common.collect.Iterables;
 
 import grafos.nodes.ControlNodePDG;
 import grafos.nodes.NodeType;
 import grafos.nodes.VariableAssignment;
+import grafos.util.X11Colours;
 
 
 public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
@@ -55,6 +53,8 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	boolean isInsideAssign = false;
     boolean isPartOfCondition = false;
 	boolean isParameterOfMethodCall = false;
+
+	Map<String,String> nodeDataDependenciesColours = new HashMap<String, String>();
 
 	/********************************************************/
 	/*********************** Metodos ************************/
@@ -553,12 +553,37 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 	private void addDataDependencyEdges(String sourceNode, String targetNode, ProgramDependencyGraph programDependencyGraph) {
 		System.out.println("DATOS NODO: " + targetNode);
 
-		String edge = sourceNode + "->" + targetNode + "[color=red, constraint = false];";
+		String colour = this.getNodeColour(sourceNode);
+
+		String edge = sourceNode + "->" + targetNode + "[color= " + colour + ", constraint = false];";
 
 		if (!programDependencyGraph.dataEdges.contains(edge))
 		{
 			programDependencyGraph.dataEdges.add(edge);
 		}
+	}
+
+	/**
+	 * Returns the colour associated to the given node.
+	 * @param node The node to get the colour from.
+	 * @return The name of the colour associated to the node.
+	 */
+	private String getNodeColour(String node) {
+		if (this.nodeDataDependenciesColours.containsKey(node))
+		{
+			return this.nodeDataDependenciesColours.get(node);
+		}
+
+		String colour = null;
+
+		do
+		{
+			colour = X11Colours.getRandomColour();
+		} while (this.nodeDataDependenciesColours.values().contains(colour));
+
+		this.nodeDataDependenciesColours.put(node, colour);
+
+		return colour;
 	}
 
 	// Crear nodo
