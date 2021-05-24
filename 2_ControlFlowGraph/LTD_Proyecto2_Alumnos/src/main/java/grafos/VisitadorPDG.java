@@ -2,6 +2,7 @@ package grafos;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ import com.github.javaparser.ast.stmt.SwitchEntryStmt;
 import com.github.javaparser.ast.stmt.SwitchStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.google.common.collect.Iterables;
 
 import grafos.nodes.ControlNodePDG;
 import grafos.nodes.NodeType;
@@ -413,12 +415,25 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 					// That way, we can copy its references and link them to the last assignment from the loop.
 					if (node.getType().isLoopType())
 					{
-						assignment = assignments.get(0);
+						// Find the first assignment that is not equal to the current assignment.
+						assignment = assignments.stream()
+							.filter(a -> !a.equals(va))
+							.findFirst()
+							.orElse(null);
 					}
 					else
 					{
+						List<VariableAssignment> aux = assignments.stream()
+							.filter(a -> !a.equals(va))
+							.collect(Collectors.toList());
+
 						// If it wasn't a loop node, get the last assignment from the variables.
-						assignment = assignments.get(assignments.size() -1);
+						assignment = aux.get(aux.size() -1);
+					}
+
+					if (assignment == null)
+					{
+						continue;
 					}
 
 					// Copy the assignment variables from the last assignment in the loop to the references of the first declaration.
