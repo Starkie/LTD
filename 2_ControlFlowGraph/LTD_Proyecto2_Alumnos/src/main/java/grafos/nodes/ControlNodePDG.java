@@ -57,22 +57,20 @@ public class ControlNodePDG extends NodeBase {
 		return this.blocks.get(this.blocks.size() - 1);
 	}
 
-	public List<NodeBase> getAllChildNodes() {
-		return this.blocks.stream()
-			.map(cnbs -> cnbs.getChildNodes())
-			.flatMap(List::stream)
-			.collect(Collectors.toList());
-	}
-
 	public ControlNodePDG getParent() {
 		return parent;
 	}
 
-	public Map<String, List<VariableAssignment>> getLastAssignments()
+	/**
+	 * Returns all the last assignments all the variables present in this control node.
+	 * @param variableName The name of the variable.
+	 * @return The list of assignments present in the control node, if any.
+	 */
+	public Map<String, List<VariableAssignmentNode>> getLastAssignments()
 	{
-		Map<String, List<VariableAssignment>> variableAssignments = new HashMap<String, List<VariableAssignment>>();
+		Map<String, List<VariableAssignmentNode>> variableAssignments = new HashMap<String, List<VariableAssignmentNode>>();
 
-		List<String> variableNames = this.getAssignedVariablesName();
+		List<String> variableNames = this.getAssignedVariablesNames();
 
 		for (String variable : variableNames)
 		{
@@ -82,7 +80,12 @@ public class ControlNodePDG extends NodeBase {
 		return variableAssignments;
 	}
 
-	public List<String> getAssignedVariablesName() {
+	/**
+	 * Returns the names of all the variables assigned in this control node .
+	 * @param variableName The name of the variable.
+	 * @return The list of assignments present in the node, if any.
+	 */
+	public List<String> getAssignedVariablesNames() {
 		List<String> variableNames = new ArrayList<String>();
 
 		for (ControlNodeBlockStatement block : this.blocks)
@@ -93,14 +96,26 @@ public class ControlNodePDG extends NodeBase {
 		return variableNames;
 	}
 
-	public List<VariableAssignment> getLastAssignments(String variableName)
+	/**
+	 * Returns all the last assignments of the given variable that are present in this control node.
+	 * @param variableName The name of the variable.
+	 * @return The list of assignments present in the control node, if any.
+	 */
+	public List<VariableAssignmentNode> getLastAssignments(String variableName)
 	{
 		return this.getLastAssignments(variableName, false);
 	}
 
-	public List<VariableAssignment> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
+	/**
+	 * Returns all the last assignments of the given variable that are present in this control node.
+	 * @param variableName The name of the variable.
+	 * @param onlyCurrentBlockAssignments A flag indicating if only the current branch of the control blocks should be visited.
+	 * 	Useful, for example, to avoid adding assignments from the then-branch of an if statement when we are visiting the else branch.
+	 * @return The list of assignments present in the control node, if any.
+	 */
+	public List<VariableAssignmentNode> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
 	{
-		List<VariableAssignment> variableAssignments = new ArrayList<VariableAssignment>();
+		List<VariableAssignmentNode> variableAssignments = new ArrayList<VariableAssignmentNode>();
 
 		if (onlyCurrentBlockAssignments)
 		{

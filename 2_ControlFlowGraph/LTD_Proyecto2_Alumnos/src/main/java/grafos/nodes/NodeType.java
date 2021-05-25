@@ -15,6 +15,10 @@ public enum NodeType {
 	SWITCH_CASE,
 	VARIABLE_ASSIGNATION;
 
+	/**
+	 * Returns a value indicating whether the {@link NodeType} is a loop type.
+	 * @return True if it is a loop type, false otherwise.
+	 */
 	public boolean isLoopType()
 	{
 		return this == WHILE

@@ -8,13 +8,15 @@ import java.util.Map;
 import com.github.javaparser.ast.stmt.BlockStmt;
 
 /**
- * Represents a {@link BlockStmt} that is present inside {@link ControlNodePDG}.
+ * Represents a {@link BlockStmt} that is present inside a {@link ControlNodePDG}.
  * This parameters where extracted from it because some ControlNodes can have more than
  * one block. For example: if-else statements can have 2 blocks.
  */
 public class ControlNodeBlockStatement {
+	// The child nodes present in the current block.
 	private List<NodeBase> childNodes;
 
+	// The parent node of this block.
 	private ControlNodePDG parentNode;
 
 	public ControlNodeBlockStatement(ControlNodePDG parentNode) {
@@ -30,25 +32,37 @@ public class ControlNodeBlockStatement {
 	 * Registers a variable assignment in the given {@link ControlNodePDG}.
 	 * @param assignment The variable assignment to register.
 	 */
-	public void addAssignment(VariableAssignment assignment)
+	public void addAssignment(VariableAssignmentNode assignment)
 	{
 		this.childNodes.add(assignment);
 	}
 
-	public List<VariableAssignment> getLastAssignments(String variableName)
+	/**
+	 * Returns all the last assignments of a given variable present in this block.
+	 * @param variableName The name of the variable.
+	 * @return The list of assignments present in the block, if any.
+	 */
+	public List<VariableAssignmentNode> getLastAssignments(String variableName)
 	{
 		return this.getLastAssignments(variableName, false);
 	}
 
-	public List<VariableAssignment> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
+	/**
+	 * Returns all the last assignments of a given variable present in this block.
+	 * @param variableName The name of the variable.
+	 * @param onlyCurrentBlockAssignments A flag indicating if only the current branch of the control blocks should be visited.
+	 * 	Useful, for example, to avoid adding assignments from the then-branch of an if statement when we are visiting the else branch.
+	 * @return The list of assignments present in the block, if any.
+	 */
+	public List<VariableAssignmentNode> getLastAssignments(String variableName, boolean onlyCurrentBlockAssignments)
 	{
-		List<VariableAssignment> variableAssignments = new ArrayList<VariableAssignment>();
+		List<VariableAssignmentNode> variableAssignments = new ArrayList<VariableAssignmentNode>();
 
 		for (int i = (this.childNodes.size() - 1); i >= 0; i--)
 		{
-			if (this.childNodes.get(i) instanceof VariableAssignment)
+			if (this.childNodes.get(i) instanceof VariableAssignmentNode)
 			{
-				VariableAssignment va = (VariableAssignment) this.childNodes.get(i);
+				VariableAssignmentNode va = (VariableAssignmentNode) this.childNodes.get(i);
 
 				if (va.getVariableName().equals(variableName))
 				{
@@ -62,6 +76,7 @@ public class ControlNodeBlockStatement {
 			{
 				ControlNodePDG node = (ControlNodePDG) this.childNodes.get(i);
 
+				// Get all the variable assignments of the control node.
 				variableAssignments.addAll(node.getLastAssignments(variableName, onlyCurrentBlockAssignments));
 			}
 		}
@@ -69,15 +84,20 @@ public class ControlNodeBlockStatement {
 		return variableAssignments;
 	}
 
+	/**
+	 * Returns the names of all the variables assigned in this block.
+	 * @param variableName The name of the variable.
+	 * @return The list of assignments present in the block, if any.
+	 */
 	public List<String> getAssignedVariablesName()
 	{
 		List<String> variableNames = new ArrayList<>();
 
 		for (NodeBase node : this.childNodes)
 		{
-			if (node instanceof VariableAssignment)
+			if (node instanceof VariableAssignmentNode)
 			{
-				VariableAssignment va = (VariableAssignment) node;
+				VariableAssignmentNode va = (VariableAssignmentNode) node;
 
 				if (!variableNames.contains(va.getVariableName()))
 				{
@@ -88,7 +108,7 @@ public class ControlNodeBlockStatement {
 			{
 				ControlNodePDG cn = (ControlNodePDG)node;
 
-				variableNames.addAll(cn.getAssignedVariablesName());
+				variableNames.addAll(cn.getAssignedVariablesNames());
 			}
 		}
 
