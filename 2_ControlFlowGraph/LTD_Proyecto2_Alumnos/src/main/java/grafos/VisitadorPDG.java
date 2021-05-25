@@ -165,8 +165,6 @@ public class VisitadorPDG extends VoidVisitorAdapter<ProgramDependencyGraph>
 		// Create the edges to the if node.
 		String ifNode = crearNodo("if (" + ifStmt.getCondition() + ")");
 
-		// TODO: Separate IF and ELSE branches.
-
 		createEdges(ifNode, programDependencyGraph);
 		// Push the if control node to the stack.
 		ControlNodePDG ifControlNode = new ControlNodePDG(NodeType.IF, ifNode, this.controlNodes.peek());
