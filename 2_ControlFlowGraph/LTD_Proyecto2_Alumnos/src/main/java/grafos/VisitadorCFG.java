@@ -1,5 +1,6 @@
 package grafos;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
@@ -9,6 +10,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.BreakStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ForStmt;
@@ -17,6 +19,7 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.SwitchEntryStmt;
 import com.github.javaparser.ast.stmt.SwitchStmt;
+import com.github.javaparser.ast.stmt.ThrowStmt;
 import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
@@ -41,6 +44,9 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 
 	// The amount of control nodes that can be unstacked.
 	int exitDepth = 0;
+
+	// A flag that indicates that a break expression has been visited.
+	boolean breakExpressionVisited = false;
 
 	/********************************************************/
 	/*********************** Metodos ************************/
@@ -275,6 +281,9 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 
 		int aux = 0;
 
+		boolean breakStmtVisited = false;
+		this.nodoAnterior = switchNode;
+
 		// Explore each case statement.
 		for (SwitchEntryStmt entry : switchStmt.getEntries())
 		{
@@ -283,9 +292,16 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 			aux += this.exitDepth;
 			this.exitDepth = 0;
 
-			this.nodoAnterior = switchNode;
+			List<String> previousNodes = new ArrayList<>();
 
-			this.visit(entry, cfg);
+			if (!breakStmtVisited)
+			{
+				previousNodes.add(this.nodoActual);
+			}
+
+			previousNodes.add(switchNode);
+
+			breakStmtVisited = this.visit(entry, cfg, previousNodes);
 		}
 
 		// Remove the current node to avoid adding duplicate transitions.
@@ -297,14 +313,13 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		this.exitDepth++;
 	}
 
-
 	/**
 	 * Visits a {@link SwitchEntryStmt} and registers all the nodes into the {@link CFG}.
 	 * @param switchEntryStatement The switch entry statement.
 	 * @param cfg The control flow graph.
+	 * @param previousNodes The previous nodes that can reach this case statement.
 	 */
-	@Override
-	public void visit(SwitchEntryStmt switchEntryStatement, CFG arg) {
+	public boolean visit(SwitchEntryStmt switchEntryStatement, CFG arg, List<String> previousNodes) {
 		// If it is a case, add the case label. Otherwise add the default label.
 		String switchLabel = switchEntryStatement.getLabel().isPresent()?
 				"case " + switchEntryStatement.getLabel().get()
@@ -312,30 +327,61 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 
 		// Create the edges from the previous node to the switch entry.
 		String switchEntryNode = crearNodo(switchLabel);
+
 		this.nodoActual = switchEntryNode;
 
-		this.crearArcos(arg);
+		// Create the references to the previous nodes.
+		for (String node : previousNodes)
+		{
+			this.nodoAnterior = node;
+
+			this.crearArcos(arg);
+		}
 
 		this.nodoAnterior = switchEntryNode;
+
+		// Set the flag of a visited break statement to false.
+		this.breakExpressionVisited = false;
+
+		// Store the switch statement control node so we can unstack all the child nodes.
+		ControlNodeCFG switchControlNode = this.controlNodes.peek();
 
 		// Visit the switch entry.
 		super.visit(switchEntryStatement, arg);
 
-		// Navigate the stack until the last switch control node is found.
-		ControlNodeCFG switchControlNode = null;
+		ControlNodeCFG controlNode = null;
 
+		// Unstack all the control nodes minus the switch.
 		for (int i = this.controlNodes.size() - 1; i >= 0; i--)
 		{
-			switchControlNode = this.controlNodes.get(i);
+			controlNode = this.controlNodes.get(i);
 
-			if (switchControlNode.getType() == NodeType.SWITCH)
+			if (controlNode.equals(switchControlNode))
 			{
 				break;
 			}
 		}
 
 		// Add the last visited node to the exit nodes of the switch.
-		switchControlNode.getExitNodes().add(this.nodoActual);
+		// If a break statement was not visited, it should not be included. It should
+		// direct to the next case.
+		if (this.breakExpressionVisited)
+		{
+			switchControlNode.getExitNodes().add(this.nodoActual);
+		}
+
+		return this.breakExpressionVisited;
+	}
+
+	/**
+	 * Visits a {@link BreakStmt} and registers it into the {@link CFG}.
+	 * @param breakStmt The break statement to visit.
+	 * @param cfg The control flow graph.
+	 */
+	public void visit(BreakStmt breakStmt, CFG cfg)
+	{
+		// Activate the flag to notify the switch entry visitor that a break statement was found.
+		this.breakExpressionVisited = true;
 	}
 
 	// Crear arcos
@@ -384,7 +430,11 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		System.out.println("NODO: " + nodoActual);
 
 		String arco = nodoAnterior + "->" + nodoActual + ";";
-		cfg.arcos.add(arco);
+
+		if (!cfg.arcos.contains(arco))
+		{
+			cfg.arcos.add(arco);
+		}
 	}
 
 	/**
