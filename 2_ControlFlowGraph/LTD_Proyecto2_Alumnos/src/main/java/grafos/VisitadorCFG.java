@@ -384,6 +384,17 @@ public class VisitadorCFG extends VoidVisitorAdapter<CFG>
 		this.breakExpressionVisited = true;
 	}
 
+	/**
+	 * Visits a {@link ThrowStmt} and registers it into the {@link CFG}.
+	 * @param breakStmt The break statement to visit.
+	 * @param cfg The control flow graph.
+	 */
+	public void visit(ThrowStmt throwsStmt, CFG cfg)
+	{
+		// Do nothing with the throw statement on the flow, just register it as a expression.
+		this.visit(new ExpressionStmt(throwsStmt.getExpression()), cfg);
+	}
+
 	// Crear arcos
 	private void crearArcos(CFG cfg)
 	{
